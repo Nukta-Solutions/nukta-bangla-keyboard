@@ -13,7 +13,8 @@ Run `scripts/install.sh` again after any code change.
 | You type | You get |
 |---|---|
 | `d j` | কি (ি ে ৈ go **before** the consonant) |
-| `c j f` / `c j X` | কো / কৌ |
+| `c j f` or `j x` | কো |
+| `c j X` or `j X` | কৌ |
 | `d j g k` | ক্তি (`g` = link ্ for juktakkhor) |
 | `j g N` | ক্ষ |
 | `m A` | র্ম (reph typed **after** the consonant) |
@@ -24,6 +25,11 @@ Run `scripts/install.sh` again after any code change.
 | `Q`, `\|`, `&`, `\`, `$`, `G` | ং ঃ ঁ ৎ ৳ । |
 
 Backspace undoes the last key of the syllable you're still typing.
+
+### Kar after consonant mode
+From the ব input menu, choose **Kar after consonant** to type ি ে ৈ after the consonant:
+`j c` → কে, `j d` → কি, `j g k d` → ক্তি, `j V c u` → কলেজ. Switch back with **Classic Bijoy**.
+Your choice is remembered. `j x` → কো and `j X` → কৌ work in both modes.
 
 ## Development
 ```

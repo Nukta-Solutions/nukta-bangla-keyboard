@@ -29,11 +29,13 @@ struct Syllable: Equatable {
     var hasReph: Bool { tokens.contains(.reph) }
     var hasPreKar: Bool { tokens.contains { if case .preKar = $0 { return true }; return false } }
     var lastIsHasanta: Bool { tokens.last == .hasanta }
-    /// A post-base kar or sign closes the cluster: no more consonants can join.
+    /// A kar or sign after the consonants closes the cluster: no more consonants can join.
+    /// (A pre-base kar typed first, classic style, doesn't.)
     var isClusterClosed: Bool {
-        tokens.contains {
-            switch $0 {
+        tokens.enumerated().contains { index, token in
+            switch token {
             case .postKar, .sign, .explicitHasanta: return true
+            case .preKar: return index > 0
             default: return false
             }
         }
@@ -68,10 +70,12 @@ struct Syllable: Equatable {
             }
         }
 
-        // Split vowels: ে … া → ো, ে … ৗ → ৌ
+        // Split vowels: ে … া → ো, ে … ৗ → ৌ; ৗ on its own after a consonant → ৌ (j X → কৌ)
         if pre == "\u{09C7}", let first = post.first {
             if first == "\u{09BE}" { pre = "\u{09CB}"; post.removeFirst() }
             else if first == "\u{09D7}" { pre = "\u{09CC}"; post.removeFirst() }
+        } else if pre.isEmpty, !cluster.isEmpty, post.first == "\u{09D7}" {
+            post[0] = "\u{09CC}"
         }
 
         return (reph ? "র" + Self.hasantaChar : "") + cluster + pre + post.joined() + signs

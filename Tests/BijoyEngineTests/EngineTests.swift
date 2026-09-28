@@ -2,8 +2,8 @@ import XCTest
 @testable import BijoyEngine
 
 /// `⌫` in a key string means backspace.
-private func type(_ keys: String) -> String {
-    let engine = Engine()
+private func type(_ keys: String, _ order: KarOrder = .classic) -> String {
+    let engine = Engine(karOrder: order)
     var doc = ""
     for ch in keys {
         if ch == "⌫" {
@@ -22,8 +22,8 @@ private func type(_ keys: String) -> String {
 }
 
 /// Same, but plays the edits through TextDiff the way the direct-insert writer does.
-private func typeViaDiffs(_ keys: String) -> String {
-    let engine = Engine()
+private func typeViaDiffs(_ keys: String, _ order: KarOrder = .classic) -> String {
+    let engine = Engine(karOrder: order)
     var doc = ""
     var shown = ""
     func apply(_ out: Output) {
@@ -118,6 +118,11 @@ final class EngineTests: XCTestCase {
         ("j x", "ক ও"),
         ("cjx", "কেও"),
         ("jx⌫", "ক"),
+        // X after a consonant → ৌ
+        ("jX", "কৌ"),
+        ("cjX", "কৌ"),
+        ("mXn", "মৌস"),
+        ("ozX", "গ্রৌ"),
         // signs
         ("hfQVf", "বাংলা"),
         ("yf&l", "চাঁদ"),
@@ -157,6 +162,40 @@ final class EngineTests: XCTestCase {
         for c in cases {
             let got = type(c.keys)
             XCTAssertEqual(scalars(got), scalars(c.expected), "keys: \(c.keys) → \(got), expected \(c.expected)")
+        }
+    }
+
+    /// Kar-after-consonant mode: j c → কে. Same rules otherwise.
+    let afterConsonantCases: [(keys: String, expected: String)] = [
+        ("jc", "কে"),
+        ("jd", "কি"),
+        ("jC", "কৈ"),
+        ("jD", "কী"),
+        ("jcf", "কো"),
+        ("jx", "কো"),
+        ("jX", "কৌ"),
+        ("jgkd", "ক্তি"),
+        ("jgNckz", "ক্ষেত্র"),
+        ("jVcu", "কলেজ"),
+        ("hfQVflcM", "বাংলাদেশ"),
+        ("hdlZfVW", "বিদ্যাল\u{09DF}"),
+        ("jAd", "র্কি"),
+        ("jdA", "র্কি"),
+        ("Mzcd", "শ্রে\u{09BF}"),
+        ("MzcBd", "শ্রেণি"),
+        ("gfmd", "আমি"),
+        ("jgd", "কই"),
+        ("jc&", "কেঁ"),
+        ("d", "\u{09BF}"),
+        ("d j", "\u{09BF} ক"),
+        ("jcg", "কে্"),
+        ("jc⌫", "ক"),
+    ]
+
+    func testAfterConsonantMode() {
+        for c in afterConsonantCases {
+            XCTAssertEqual(scalars(type(c.keys, .afterConsonant)), scalars(c.expected), "keys: \(c.keys)")
+            XCTAssertEqual(scalars(typeViaDiffs(c.keys, .afterConsonant)), scalars(c.expected), "keys: \(c.keys) (diff path)")
         }
     }
 

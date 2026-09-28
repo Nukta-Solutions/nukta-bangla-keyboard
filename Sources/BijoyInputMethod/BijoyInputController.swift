@@ -10,6 +10,7 @@ final class BijoyInputController: IMKInputController {
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
         engine.reset()
+        engine.karOrder = Settings.karOrder
         if let client = sender as? Client {
             writer.configure(for: client)
         }
@@ -24,12 +25,45 @@ final class BijoyInputController: IMKInputController {
         commitAll(sender as? Client)
     }
 
+    // MARK: Input menu (the ব icon)
+
+    override func menu() -> NSMenu! {
+        let menu = NSMenu()
+        let classic = NSMenuItem(title: "Classic Bijoy  (c j → কে)", action: #selector(selectClassic(_:)), keyEquivalent: "")
+        classic.state = Settings.karOrder == .classic ? .on : .off
+        let after = NSMenuItem(title: "Kar after consonant  (j c → কে)", action: #selector(selectAfterConsonant(_:)), keyEquivalent: "")
+        after.state = Settings.karOrder == .afterConsonant ? .on : .off
+        menu.addItem(classic)
+        menu.addItem(after)
+        return menu
+    }
+
+    @objc func selectClassic(_ sender: Any?) {
+        setKarOrder(.classic)
+    }
+
+    @objc func selectAfterConsonant(_ sender: Any?) {
+        setKarOrder(.afterConsonant)
+    }
+
+    private func setKarOrder(_ order: KarOrder) {
+        commitAll(client() as? Client)
+        Settings.karOrder = order
+        engine.karOrder = order
+    }
+
     override func recognizedEvents(_ sender: Any!) -> Int {
         Int(NSEvent.EventTypeMask([.keyDown, .leftMouseDown, .rightMouseDown]).rawValue)
     }
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, let client = sender as? Client else { return false }
+
+        // The mode may have been changed from another app's controller.
+        if engine.karOrder != Settings.karOrder {
+            commitAll(client)
+            engine.karOrder = Settings.karOrder
+        }
 
         guard event.type == .keyDown else {
             // A click may move the cursor: finish the syllable.
@@ -94,6 +128,15 @@ final class BijoyInputController: IMKInputController {
             writer.apply(out, to: client)
         }
         writer.reset()
+    }
+}
+
+/// Preferences, stored in the input method's own user defaults.
+enum Settings {
+    private static let karOrderKey = "karOrder"
+
+    static var karOrder: KarOrder = UserDefaults.standard.string(forKey: karOrderKey).flatMap(KarOrder.init) ?? .classic {
+        didSet { UserDefaults.standard.set(karOrder.rawValue, forKey: karOrderKey) }
     }
 }
 

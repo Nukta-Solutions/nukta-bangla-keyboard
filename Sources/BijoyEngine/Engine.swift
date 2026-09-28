@@ -11,12 +11,24 @@ public struct Output: Equatable {
     }
 }
 
+/// Where ি ে ৈ are typed relative to their consonant.
+public enum KarOrder: String {
+    /// Classic Bijoy: before the consonant (`c j` → কে).
+    case classic
+    /// After the consonant (`j c` → কে).
+    case afterConsonant
+}
+
 /// Bijoy state machine. Pure logic, no AppKit.
 public final class Engine {
     private var syllable = Syllable()
     private var committed = ""
 
-    public init() {}
+    public var karOrder: KarOrder
+
+    public init(karOrder: KarOrder = .classic) {
+        self.karOrder = karOrder
+    }
 
     public var isComposing: Bool { !syllable.isEmpty }
     public var display: String { syllable.rendered }
@@ -84,8 +96,17 @@ public final class Engine {
                 commitSyllable()
                 committed += Syllable.independentVowels[k] ?? k
             } else if Syllable.preBaseKars.contains(k) {
-                commitSyllable()
-                syllable.append(.preKar(k))
+                if karOrder == .afterConsonant {
+                    if syllable.hasCluster && !syllable.isClusterClosed {
+                        syllable.append(.preKar(k)) // rendered after the cluster anyway
+                    } else {
+                        commitSyllable()
+                        committed += k
+                    }
+                } else {
+                    commitSyllable()
+                    syllable.append(.preKar(k))
+                }
             } else if !syllable.isEmpty {
                 syllable.append(.postKar(k))
             } else {

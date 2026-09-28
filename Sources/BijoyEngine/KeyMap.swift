@@ -11,8 +11,6 @@ public enum BanglaKey: Equatable {
     case reph
     /// ং ঃ ঁ — attach to the end of the current syllable.
     case sign(String)
-    /// After a consonant: the kar (`j x` → কো). Anywhere else: the full vowel (`x` → ও).
-    case vowelOrKar(vowel: String, kar: String)
     /// অ — a full vowel that a following া turns into আ (F f).
     case vowel(String)
     /// Stand-alone text: digits, ।, ৳, ৎ.
@@ -44,7 +42,7 @@ public enum KeyMap {
         "l": .consonant("দ"), "L": .consonant("ধ"),
 
         "z": .phala("\u{09CD}র"), "Z": .phala("\u{09CD}য"),
-        "x": .vowelOrKar(vowel: "ও", kar: "\u{09CB}"), "X": .kar("\u{09D7}"),      // ৗ (au length mark)
+        "x": .kar("\u{09CB}"), "X": .kar("\u{09D7}"),   // ো, ৗ (au length mark)
         "c": .kar("\u{09C7}"), "C": .kar("\u{09C8}"),   // ে ৈ
         "v": .consonant("র"), "V": .consonant("ল"),
         "b": .consonant("ন"), "B": .consonant("ণ"),

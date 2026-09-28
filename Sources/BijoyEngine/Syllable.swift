@@ -19,7 +19,7 @@ struct Syllable: Equatable {
     /// `g` + kar → full vowel.
     static let independentVowels: [String: String] = [
         "\u{09BE}": "আ", "\u{09BF}": "ই", "\u{09C0}": "ঈ", "\u{09C1}": "উ", "\u{09C2}": "ঊ",
-        "\u{09C3}": "ঋ", "\u{09C7}": "এ", "\u{09C8}": "ঐ", "\u{09D7}": "ঔ",
+        "\u{09C3}": "ঋ", "\u{09C7}": "এ", "\u{09C8}": "ঐ", "\u{09CB}": "ও", "\u{09D7}": "ঔ",
     ]
 
     private(set) var tokens: [Token] = []
@@ -27,7 +27,6 @@ struct Syllable: Equatable {
     var isEmpty: Bool { tokens.isEmpty }
     var hasCluster: Bool { tokens.contains { if case .consonant = $0 { return true }; return false } }
     var hasReph: Bool { tokens.contains(.reph) }
-    var hasPreKar: Bool { tokens.contains { if case .preKar = $0 { return true }; return false } }
     var lastIsHasanta: Bool { tokens.last == .hasanta }
     /// A kar or sign after the consonants closes the cluster: no more consonants can join.
     /// (A pre-base kar typed first, classic style, doesn't.)
@@ -70,9 +69,9 @@ struct Syllable: Equatable {
             }
         }
 
-        // Split vowels: ে … া → ো, ে … ৗ → ৌ; ৗ on its own after a consonant → ৌ (j X → কৌ)
+        // Split vowels: ে … া → ো, ে … ৗ → ৌ, ে … ো → ো; ৗ on its own after a consonant → ৌ (j X → কৌ)
         if pre == "\u{09C7}", let first = post.first {
-            if first == "\u{09BE}" { pre = "\u{09CB}"; post.removeFirst() }
+            if first == "\u{09BE}" || first == "\u{09CB}" { pre = "\u{09CB}"; post.removeFirst() }
             else if first == "\u{09D7}" { pre = "\u{09CC}"; post.removeFirst() }
         } else if pre.isEmpty, !cluster.isEmpty, post.first == "\u{09D7}" {
             post[0] = "\u{09CC}"

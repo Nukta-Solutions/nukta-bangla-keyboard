@@ -19,7 +19,7 @@ Run `scripts/install.sh` again after any code change.
 | `j g N` | ক্ষ |
 | `m A` | র্ম (reph typed **after** the consonant) |
 | `o z` / `h Z` | গ্র / ব্য (`z` ্র, `Z` ্য) |
-| `g f`, `g d`, `g s`, `g c` … | আ ই উ এ … (`g` + kar = full vowel) |
+| `g f`, `g d`, `g s`, `g c`, `g x` … | আ ই উ এ ও … (`g` + kar = full vowel) |
 | `j g d` | কই |
 | `g g` | visible hasanta (ক্‌) |
 | `Q`, `\|`, `&`, `\`, `$`, `G` | ং ঃ ঁ ৎ ৳ । |

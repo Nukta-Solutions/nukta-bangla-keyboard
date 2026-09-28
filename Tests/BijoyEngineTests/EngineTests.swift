@@ -2,7 +2,7 @@ import XCTest
 @testable import BijoyEngine
 
 /// `⌫` in a key string means backspace.
-private func type(_ keys: String, _ order: KarOrder = .classic) -> String {
+private func type(_ keys: String, _ order: KarOrder = .mixed) -> String {
     let engine = Engine(karOrder: order)
     var doc = ""
     for ch in keys {
@@ -22,7 +22,7 @@ private func type(_ keys: String, _ order: KarOrder = .classic) -> String {
 }
 
 /// Same, but plays the edits through TextDiff the way the direct-insert writer does.
-private func typeViaDiffs(_ keys: String, _ order: KarOrder = .classic) -> String {
+private func typeViaDiffs(_ keys: String, _ order: KarOrder = .mixed) -> String {
     let engine = Engine(karOrder: order)
     var doc = ""
     var shown = ""
@@ -160,53 +160,78 @@ final class EngineTests: XCTestCase {
     ]
 
     func testWords() {
-        for c in cases {
-            let got = type(c.keys)
-            XCTAssertEqual(scalars(got), scalars(c.expected), "keys: \(c.keys) → \(got), expected \(c.expected)")
+        for order in [KarOrder.mixed, .classic] {
+            for c in cases {
+                let got = type(c.keys, order)
+                XCTAssertEqual(scalars(got), scalars(c.expected), "\(order) keys: \(c.keys) → \(got), expected \(c.expected)")
+            }
         }
     }
 
-    /// Kar-after-consonant mode: j c → কে. Same rules otherwise.
-    let afterConsonantCases: [(keys: String, expected: String)] = [
-        ("jc", "কে"),
-        ("jd", "কি"),
-        ("jC", "কৈ"),
-        ("jD", "কী"),
-        ("jcf", "কো"),
-        ("jx", "কো"),
-        ("jcx", "কো"),
-        ("gx", "ও"),
-        ("jgx", "কও"),
-        ("jX", "কৌ"),
-        ("jgkd", "ক্তি"),
-        ("jgNckz", "ক্ষেত্র"),
-        ("jVcu", "কলেজ"),
-        ("hfQVflcM", "বাংলাদেশ"),
+    /// Mixed (default): both orders, as in Avro's Bijoy layout.
+    let mixedCases: [(keys: String, expected: String)] = [
+        // কো / কৌ / কি / কে / কৈ, every way round
+        ("cjf", "কো"), ("jx", "কো"), ("jcf", "কো"), ("cjx", "কো"), ("jcx", "কো"),
+        ("cjX", "কৌ"), ("jX", "কৌ"), ("jcX", "কৌ"),
+        ("dj", "কি"), ("jd", "কি"),
+        ("cj", "কে"), ("jc", "কে"),
+        ("Cj", "কৈ"), ("jC", "কৈ"),
+        // বিজয় typed both ways
+        ("hduW", "বিজ\u{09DF}"),
+        ("dhuW", "বিজ\u{09DF}"),
+        // juktakkhor both ways
+        ("djgk", "ক্তি"), ("jgkd", "ক্তি"),
+        ("cjgNkz", "ক্ষেত্র"), ("jgNckz", "ক্ষেত্র"),
+        ("Mzcd", "শ্রে\u{09BF}"), ("McBd", "শেণি"),
+        ("Mzcbd", "শ্রেনি"), ("MzcBd", "শ্রেণি"), ("cMzdB", "শ্রেণি"),
+        // kar after a bare consonant attaches to it
+        ("jVcu", "কলেজ"), ("jcVu", "কেলজ"),
+        ("mbc", "মনে"), ("mcb", "মেন"),
         ("hdlZfVW", "বিদ্যাল\u{09DF}"),
-        ("jAd", "র্কি"),
-        ("jdA", "র্কি"),
-        ("Mzcd", "শ্রে\u{09BF}"),
-        ("MzcBd", "শ্রেণি"),
+        ("hfQVflcM", "বাংলাদেশ"), ("hfQVfclM", "বাংলাদেশ"),
+        ("LbZhfl", "ধন্যবাদ"),
+        // reph both ways, before or after the kar
+        ("jAd", "র্কি"), ("jdA", "র্কি"), ("djA", "র্কি"), ("vgjd", "র্কি"),
+        ("mAx", "র্মো"), ("mxA", "র্মো"),
+        // other
         ("gfmd", "আমি"),
         ("jgd", "কই"),
         ("jc&", "কেঁ"),
         ("d", "\u{09BF}"),
-        ("d j", "\u{09BF} ক"),
+        ("d ", "\u{09BF} "),
         ("jcg", "কে্"),
         ("jc⌫", "ক"),
+        ("hd⌫u", "বজ"),
     ]
 
-    func testAfterConsonantMode() {
-        for c in afterConsonantCases {
-            XCTAssertEqual(scalars(type(c.keys, .afterConsonant)), scalars(c.expected), "keys: \(c.keys)")
-            XCTAssertEqual(scalars(typeViaDiffs(c.keys, .afterConsonant)), scalars(c.expected), "keys: \(c.keys) (diff path)")
+    /// Strict classic: ি ে ৈ always wait for the next consonant.
+    let classicCases: [(keys: String, expected: String)] = [
+        ("jcVu", "কলেজ"),
+        ("mcb", "মনে"),
+        ("hduW", "বজি\u{09DF}"),
+        ("jc ", "ক\u{09C7} "),
+    ]
+
+    func testMixedMode() {
+        for c in mixedCases {
+            XCTAssertEqual(scalars(type(c.keys, .mixed)), scalars(c.expected), "keys: \(c.keys) → \(type(c.keys, .mixed))")
+            XCTAssertEqual(scalars(typeViaDiffs(c.keys, .mixed)), scalars(c.expected), "keys: \(c.keys) (diff path)")
+        }
+    }
+
+    func testClassicMode() {
+        for c in classicCases {
+            XCTAssertEqual(scalars(type(c.keys, .classic)), scalars(c.expected), "keys: \(c.keys) → \(type(c.keys, .classic))")
+            XCTAssertEqual(scalars(typeViaDiffs(c.keys, .classic)), scalars(c.expected), "keys: \(c.keys) (diff path)")
         }
     }
 
     func testDirectInsertDiffsProduceSameText() {
-        for c in cases {
-            let got = typeViaDiffs(c.keys)
-            XCTAssertEqual(scalars(got), scalars(c.expected), "keys: \(c.keys) (diff path)")
+        for order in [KarOrder.mixed, .classic] {
+            for c in cases {
+                let got = typeViaDiffs(c.keys, order)
+                XCTAssertEqual(scalars(got), scalars(c.expected), "\(order) keys: \(c.keys) (diff path)")
+            }
         }
     }
 

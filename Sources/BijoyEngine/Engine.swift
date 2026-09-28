@@ -13,10 +13,11 @@ public struct Output: Equatable {
 
 /// Where ি ে ৈ are typed relative to their consonant.
 public enum KarOrder: String {
-    /// Classic Bijoy: before the consonant (`c j` → কে).
+    /// Avro style: after a bare consonant the kar attaches to it (`j c` → কে); anywhere else
+    /// it waits for the next consonant (`c j` → কে).
+    case mixed
+    /// Strict classic Bijoy: always before the consonant (`c j` → কে, `j c V` → কলে).
     case classic
-    /// After the consonant (`j c` → কে).
-    case afterConsonant
 }
 
 /// Bijoy state machine. Pure logic, no AppKit.
@@ -26,7 +27,7 @@ public final class Engine {
 
     public var karOrder: KarOrder
 
-    public init(karOrder: KarOrder = .classic) {
+    public init(karOrder: KarOrder = .mixed) {
         self.karOrder = karOrder
     }
 
@@ -96,13 +97,8 @@ public final class Engine {
                 commitSyllable()
                 committed += Syllable.independentVowels[k] ?? k
             } else if Syllable.preBaseKars.contains(k) {
-                if karOrder == .afterConsonant {
-                    if syllable.hasCluster && !syllable.isClusterClosed {
-                        syllable.append(.preKar(k)) // rendered after the cluster anyway
-                    } else {
-                        commitSyllable()
-                        committed += k
-                    }
+                if karOrder == .mixed && syllable.hasCluster && !syllable.isClusterClosed && !syllable.hasPreKar {
+                    syllable.append(.preKar(k)) // belongs to the consonant just typed; rendered after the cluster
                 } else {
                     commitSyllable()
                     syllable.append(.preKar(k))

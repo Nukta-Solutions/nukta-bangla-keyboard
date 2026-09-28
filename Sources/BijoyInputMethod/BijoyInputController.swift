@@ -29,21 +29,21 @@ final class BijoyInputController: IMKInputController {
 
     override func menu() -> NSMenu! {
         let menu = NSMenu()
-        let classic = NSMenuItem(title: "Classic Bijoy  (c j → কে)", action: #selector(selectClassic(_:)), keyEquivalent: "")
+        let mixed = NSMenuItem(title: "Mixed, Avro style  (c j or j c → কে)", action: #selector(selectMixed(_:)), keyEquivalent: "")
+        mixed.state = Settings.karOrder == .mixed ? .on : .off
+        let classic = NSMenuItem(title: "Classic Bijoy, strict  (c j → কে)", action: #selector(selectClassic(_:)), keyEquivalent: "")
         classic.state = Settings.karOrder == .classic ? .on : .off
-        let after = NSMenuItem(title: "Kar after consonant  (j c → কে)", action: #selector(selectAfterConsonant(_:)), keyEquivalent: "")
-        after.state = Settings.karOrder == .afterConsonant ? .on : .off
+        menu.addItem(mixed)
         menu.addItem(classic)
-        menu.addItem(after)
         return menu
+    }
+
+    @objc func selectMixed(_ sender: Any?) {
+        setKarOrder(.mixed)
     }
 
     @objc func selectClassic(_ sender: Any?) {
         setKarOrder(.classic)
-    }
-
-    @objc func selectAfterConsonant(_ sender: Any?) {
-        setKarOrder(.afterConsonant)
     }
 
     private func setKarOrder(_ order: KarOrder) {
@@ -135,7 +135,7 @@ final class BijoyInputController: IMKInputController {
 enum Settings {
     private static let karOrderKey = "karOrder"
 
-    static var karOrder: KarOrder = UserDefaults.standard.string(forKey: karOrderKey).flatMap(KarOrder.init) ?? .classic {
+    static var karOrder: KarOrder = UserDefaults.standard.string(forKey: karOrderKey).flatMap(KarOrder.init) ?? .mixed {
         didSet { UserDefaults.standard.set(karOrder.rawValue, forKey: karOrderKey) }
     }
 }

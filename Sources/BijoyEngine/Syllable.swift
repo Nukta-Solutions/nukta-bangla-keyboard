@@ -27,6 +27,7 @@ struct Syllable: Equatable {
     var isEmpty: Bool { tokens.isEmpty }
     var hasCluster: Bool { tokens.contains { if case .consonant = $0 { return true }; return false } }
     var hasReph: Bool { tokens.contains(.reph) }
+    var hasPreKar: Bool { tokens.contains { if case .preKar = $0 { return true }; return false } }
     var lastIsHasanta: Bool { tokens.last == .hasanta }
     /// A post-base kar or sign closes the cluster: no more consonants can join.
     var isClusterClosed: Bool {

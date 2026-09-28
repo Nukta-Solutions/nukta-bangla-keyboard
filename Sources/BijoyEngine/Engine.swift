@@ -92,6 +92,19 @@ public final class Engine {
                 committed += k
             }
 
+        case .vowelOrKar(let vowel, let kar):
+            if syllable.lastIsHasanta {
+                // g x → ও even after a consonant (কও)
+                syllable.removeLast()
+                commitSyllable()
+                committed += vowel
+            } else if syllable.hasCluster && !syllable.hasPreKar {
+                syllable.append(.postKar(kar))
+            } else {
+                commitSyllable()
+                committed += vowel
+            }
+
         case .reph:
             if syllable.hasCluster && !syllable.hasReph {
                 syllable.append(.reph)

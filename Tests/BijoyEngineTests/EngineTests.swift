@@ -107,6 +107,17 @@ final class EngineTests: XCTestCase {
         ("gaB", "ঋণ"),
         ("gDl", "ঈদ"),
         ("xcj", "ওকে"),
+        // x after a consonant → ো
+        ("jx", "কো"),
+        ("jxb", "কোন"),
+        ("Hfvx", "ভারো"),
+        ("jx&", "কোঁ"),
+        ("mAx", "র্মো"),
+        ("ozx", "গ্রো"),
+        ("jgx", "কও"),
+        ("j x", "ক ও"),
+        ("cjx", "কেও"),
+        ("jx⌫", "ক"),
         // signs
         ("hfQVf", "বাংলা"),
         ("yf&l", "চাঁদ"),

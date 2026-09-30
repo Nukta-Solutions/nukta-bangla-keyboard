@@ -39,8 +39,11 @@ struct ClientWriter {
     /// A read-back failed while rewriting during this activation: stop trusting this field.
     private var untrusted = false
     private var syllableMode: Mode = .direct
-    /// What is currently in the document (or marked text) for the syllable in progress.
+    /// Exactly what is currently in the document (or marked text) for the syllable in progress.
     private var shown = ""
+    /// After a rewrite: where the cursor must be if the app really did it. Checked on the next key,
+    /// because some editors (Facebook) accept the rewrite but just insert at the cursor.
+    private var pendingRewriteCheck: Int?
     /// Last few characters we believe sit right before the cursor; empty when unknown.
     private var context = ""
 
@@ -52,6 +55,7 @@ struct ClientWriter {
         untrusted = false
         shown = ""
         context = ""
+        pendingRewriteCheck = nil
         let app = bundleID ?? "?", marked = alwaysMarked
         log.debug("activate \(app, privacy: .public) alwaysMarked=\(marked)")
     }
@@ -64,6 +68,7 @@ struct ClientWriter {
     /// The cursor may have moved (arrows, Enter, click, shortcut…).
     mutating func forgetContext() {
         context = ""
+        pendingRewriteCheck = nil
     }
 
     /// The app itself typed this (a key we passed through, like space or a comma).
@@ -74,6 +79,13 @@ struct ClientWriter {
     /// Returns nil on success.
     @discardableResult
     mutating func apply(_ out: Output, to client: Client) -> Failure? {
+        if let expected = pendingRewriteCheck {
+            pendingRewriteCheck = nil
+            let location = client.selectedRange().location
+            if location != expected {
+                return fail(.textChanged, "rewrite ignored (cursor \(location), expected \(expected))")
+            }
+        }
         if shown.isEmpty {
             syllableMode = chooseMode(for: client)
         }
@@ -118,7 +130,7 @@ struct ClientWriter {
     }
 
     private mutating func applyDirect(_ out: Output, to client: Client) -> Failure? {
-        let edit = TextDiff.edit(from: shown, to: out.committed + out.display)
+        let edit = TextDiff.edit(from: shown, to: out.committed + out.visible)
         let notFound = NSRange(location: NSNotFound, length: 0)
 
         if edit.deleted.isEmpty {
@@ -126,7 +138,7 @@ struct ClientWriter {
                 client.insertText(edit.inserted, replacementRange: notFound)
             }
             remember(deleting: 0, inserting: edit.inserted)
-            shown = out.display
+            shown = TextDiff.remainder(of: shown + edit.inserted, after: out.committed)
             return nil
         }
 
@@ -147,8 +159,10 @@ struct ClientWriter {
             return fail(.textChanged, "read-back mismatch")
         }
         client.insertText(edit.inserted, replacementRange: range)
+        pendingRewriteCheck = range.location + edit.inserted.utf16.count
         remember(deleting: edit.deleted.unicodeScalars.count, inserting: edit.inserted)
-        shown = out.display
+        let doc = TextDiff.dropLast(edit.deleted.unicodeScalars.count, of: shown) + edit.inserted
+        shown = TextDiff.remainder(of: doc, after: out.committed)
         return nil
     }
 
@@ -175,6 +189,7 @@ struct ClientWriter {
         untrusted = true
         shown = ""
         context = ""
+        pendingRewriteCheck = nil
         return failure
     }
 

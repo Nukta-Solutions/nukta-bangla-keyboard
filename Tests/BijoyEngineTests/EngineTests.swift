@@ -21,17 +21,23 @@ private func type(_ keys: String, _ order: KarOrder = .mixed) -> String {
     return doc + engine.commit().committed
 }
 
-/// Same, but plays the edits through TextDiff the way the direct-insert writer does.
-private func typeViaDiffs(_ keys: String, _ order: KarOrder = .mixed) -> String {
+/// Same, but plays the edits through TextDiff the way the direct-insert writer does,
+/// keeping the document exactly as an app would hold it. `rewrites` counts edits that had
+/// to replace text already on screen (the ones some editors ignore).
+private func typeWithEdits(_ keys: String, _ order: KarOrder = .mixed) -> (doc: String, rewrites: Int) {
     let engine = Engine(karOrder: order)
     var doc = ""
     var shown = ""
+    var rewrites = 0
     func apply(_ out: Output) {
-        let edit = TextDiff.edit(from: shown, to: out.committed + out.display)
-        XCTAssertTrue(String(doc.unicodeScalars.suffix(edit.deleted.unicodeScalars.count)) == edit.deleted)
-        doc.unicodeScalars.removeLast(edit.deleted.unicodeScalars.count)
-        doc += edit.inserted
-        shown = out.display
+        let edit = TextDiff.edit(from: shown, to: out.committed + out.visible)
+        if !edit.deleted.isEmpty {
+            rewrites += 1
+            XCTAssertTrue(String(doc.unicodeScalars.suffix(edit.deleted.unicodeScalars.count)) == edit.deleted)
+        }
+        doc = TextDiff.dropLast(edit.deleted.unicodeScalars.count, of: doc) + edit.inserted
+        let tail = TextDiff.dropLast(edit.deleted.unicodeScalars.count, of: shown) + edit.inserted
+        shown = TextDiff.remainder(of: tail, after: out.committed)
     }
     for ch in keys {
         if ch == "⌫" {
@@ -47,7 +53,12 @@ private func typeViaDiffs(_ keys: String, _ order: KarOrder = .mixed) -> String 
         }
     }
     apply(engine.commit())
-    return doc
+    return (doc, rewrites)
+}
+
+/// Compared with canonical equivalence: on screen ো may be ে + া.
+private func typeViaDiffs(_ keys: String, _ order: KarOrder = .mixed) -> String {
+    typeWithEdits(keys, order).doc
 }
 
 private func scalars(_ s: String) -> String {
@@ -215,14 +226,14 @@ final class EngineTests: XCTestCase {
     func testMixedMode() {
         for c in mixedCases {
             XCTAssertEqual(scalars(type(c.keys, .mixed)), scalars(c.expected), "keys: \(c.keys) → \(type(c.keys, .mixed))")
-            XCTAssertEqual(scalars(typeViaDiffs(c.keys, .mixed)), scalars(c.expected), "keys: \(c.keys) (diff path)")
+            XCTAssertEqual(typeViaDiffs(c.keys, .mixed), c.expected, "keys: \(c.keys) (diff path)")
         }
     }
 
     func testClassicMode() {
         for c in classicCases {
             XCTAssertEqual(scalars(type(c.keys, .classic)), scalars(c.expected), "keys: \(c.keys) → \(type(c.keys, .classic))")
-            XCTAssertEqual(scalars(typeViaDiffs(c.keys, .classic)), scalars(c.expected), "keys: \(c.keys) (diff path)")
+            XCTAssertEqual(typeViaDiffs(c.keys, .classic), c.expected, "keys: \(c.keys) (diff path)")
         }
     }
 
@@ -230,7 +241,7 @@ final class EngineTests: XCTestCase {
         for order in [KarOrder.mixed, .classic] {
             for c in cases {
                 let got = typeViaDiffs(c.keys, order)
-                XCTAssertEqual(scalars(got), scalars(c.expected), "\(order) keys: \(c.keys) (diff path)")
+                XCTAssertEqual(got, c.expected, "\(order) keys: \(c.keys) (diff path)")
             }
         }
     }
@@ -266,7 +277,41 @@ final class EngineTests: XCTestCase {
         XCTAssertNil(e.process(character: "\n"))
     }
 
+    /// These must never rewrite text already on screen, so they work in editors that ignore
+    /// rewrites (Facebook, Messenger…).
+    func testCommonSpellingsNeedNoRewrite() {
+        let words = [
+            "Ofcnv",        // ঘাসের
+            "cjf", "jcf", "jx", "cjX", "jcX", "jX",  // কো কৌ
+            "dj", "jd", "cj", "jc", "Cj",
+            "dhuW", "hduW",  // বিজয়
+            "hfQVfclM", "hfQVflcM",  // বাংলাদেশ
+            "Ff", "Ffmd", "gd", "gx", "jgd",
+            "cnf&", "jVcu", "mbc",
+            "crX&Yfcbf",  // পৌঁছানো
+            "gfmfv ncfbfv hfQVf",
+            "vgm", "jgkd", "ugug", "ugughV",  // র্ম ক্তি, juktakkhor in Unicode order
+        ]
+        for order in [KarOrder.mixed, .classic] {
+            for w in words {
+                XCTAssertEqual(typeWithEdits(w, order).rewrites, 0, "\(order) \(w) → \(typeWithEdits(w, order).doc)")
+            }
+        }
+        for w in ["jgNckz", "jgkd", "LbZhfl"] {  // ক্ষেত্র, mixed only
+            XCTAssertEqual(typeWithEdits(w, .mixed).rewrites, 0, "mixed \(w) → \(typeWithEdits(w, .mixed).doc)")
+        }
+    }
+
+    func testRephAndLateJuktakkharStillRewrite() {
+        XCTAssertEqual(typeWithEdits("mA").rewrites, 1)
+        XCTAssertEqual(typeWithEdits("mA").doc, "র্ম")
+        XCTAssertEqual(typeWithEdits("djgk").doc, "ক্তি")
+    }
+
     func testTextDiff() {
+        XCTAssertEqual(TextDiff.edit(from: "কে", to: "কো"), .init(deleted: "", inserted: "\u{09BE}"))
+        XCTAssertEqual(TextDiff.edit(from: "কে", to: "কৌ"), .init(deleted: "", inserted: "\u{09D7}"))
+        XCTAssertEqual(TextDiff.edit(from: "কে", to: "কো\u{09DF}").inserted.unicodeScalars.last, "\u{09DF}")
         XCTAssertEqual(TextDiff.edit(from: "\u{09BF}", to: "কি"), .init(deleted: "\u{09BF}", inserted: "কি"))
         XCTAssertEqual(TextDiff.edit(from: "ক", to: "কা"), .init(deleted: "", inserted: "\u{09BE}"))
         XCTAssertEqual(TextDiff.edit(from: "ম", to: "র্ম"), .init(deleted: "ম", inserted: "র্ম"))

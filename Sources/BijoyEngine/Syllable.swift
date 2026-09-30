@@ -44,6 +44,16 @@ struct Syllable: Equatable {
     mutating func append(_ token: Token) { tokens.append(token) }
     mutating func removeLast() { tokens.removeLast() }
 
+    /// Nothing goes on screen until there is a consonant to hang it on, and a trailing ্ waits
+    /// for the next key (it may turn into a full vowel: j g d → কই).
+    var visibleRendered: String {
+        guard hasCluster else { return "" }
+        guard lastIsHasanta else { return rendered }
+        var withoutLink = self
+        withoutLink.removeLast()
+        return withoutLink.rendered
+    }
+
     var rendered: String {
         var cluster = ""
         var pre = ""

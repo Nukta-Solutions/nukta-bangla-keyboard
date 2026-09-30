@@ -1,13 +1,20 @@
+import Foundation
+
 /// Result of one keystroke.
 /// `committed` is text that is final; `display` is the syllable still being built
 /// (it can still be reordered by later keys).
+/// `visible` is the part of `display` safe to put straight into a document: a syllable with no
+/// consonant yet (a waiting ি ে ৈ, a lone অ or g) stays off screen until the next key, so it
+/// never has to be rewritten.
 public struct Output: Equatable {
     public var committed: String
     public var display: String
+    public var visible: String
 
-    public init(committed: String, display: String) {
+    public init(committed: String, display: String, visible: String? = nil) {
         self.committed = committed
         self.display = display
+        self.visible = visible ?? display
     }
 }
 
@@ -135,7 +142,7 @@ public final class Engine {
             }
         }
 
-        return Output(committed: committed, display: syllable.rendered)
+        return Output(committed: committed, display: syllable.rendered, visible: syllable.visibleRendered)
     }
 
     /// Undoes the last keystroke of the current syllable. Returns nil when nothing
@@ -143,7 +150,7 @@ public final class Engine {
     public func backspace() -> Output? {
         guard !syllable.isEmpty else { return nil }
         syllable.removeLast()
-        return Output(committed: "", display: syllable.rendered)
+        return Output(committed: "", display: syllable.rendered, visible: syllable.visibleRendered)
     }
 
     /// Finalises the current syllable.
@@ -177,10 +184,39 @@ public enum TextDiff {
         let n = Array(new.unicodeScalars)
         var i = 0
         while i < o.count, i < n.count, o[i] == n[i] { i += 1 }
-        var deleted = String.UnicodeScalarView()
-        deleted.append(contentsOf: o[i...])
-        var inserted = String.UnicodeScalarView()
-        inserted.append(contentsOf: n[i...])
-        return Edit(deleted: String(deleted), inserted: String(inserted))
+        let plain = Edit(deleted: string(o[i...]), inserted: string(n[i...]))
+        guard !plain.deleted.isEmpty else { return plain }
+
+        // ে on screen that became ো or ৌ: append া / ৗ instead of rewriting.
+        // (ে + া is canonically the same text as ো.)
+        let oldD = Array(old.decomposedStringWithCanonicalMapping.unicodeScalars)
+        for j in 0...n.count {
+            let prefixD = Array(string(n[..<j]).decomposedStringWithCanonicalMapping.unicodeScalars)
+            guard prefixD.count >= oldD.count else { continue }
+            guard Array(prefixD[..<oldD.count]) == oldD else { break }
+            return Edit(deleted: "", inserted: string(prefixD[oldD.count...]) + string(n[j...]))
+        }
+        return plain
+    }
+
+    /// `doc` with a leading run canonically equal to `prefix` removed.
+    public static func remainder(of doc: String, after prefix: String) -> String {
+        guard !prefix.isEmpty else { return doc }
+        let s = Array(doc.unicodeScalars)
+        for j in 0...s.count where string(s[..<j]) == prefix {
+            return string(s[j...])
+        }
+        return doc
+    }
+
+    /// `text` with its last `count` Unicode scalars removed.
+    public static func dropLast(_ count: Int, of text: String) -> String {
+        string(Array(text.unicodeScalars).dropLast(count))
+    }
+
+    private static func string<S: Sequence>(_ scalars: S) -> String where S.Element == Unicode.Scalar {
+        var view = String.UnicodeScalarView()
+        view.append(contentsOf: scalars)
+        return String(view)
     }
 }

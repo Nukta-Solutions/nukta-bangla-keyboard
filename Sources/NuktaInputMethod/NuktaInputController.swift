@@ -1,9 +1,9 @@
 import Cocoa
 import InputMethodKit
-import BijoyEngine
+import NuktaEngine
 
-@objc(BijoyInputController)
-final class BijoyInputController: IMKInputController {
+@objc(NuktaInputController)
+final class NuktaInputController: IMKInputController {
     private let engine = Engine()
     private var writer = ClientWriter()
 
@@ -22,6 +22,22 @@ final class BijoyInputController: IMKInputController {
 
     override func commitComposition(_ sender: Any!) {
         commitAll(sender as? Client)
+    }
+
+    // MARK: Input menu (the নু icon)
+
+    override func menu() -> NSMenu! {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "নুকতা বাংলা সম্পর্কে…", action: #selector(showAbout(_:)), keyEquivalent: ""))
+        return menu
+    }
+
+    @objc func showAbout(_ sender: Any?) {
+        // Name, version, icon and copyright come from Info.plist.
+        // A background-only app has to bring itself forward, or the panel opens behind the current app.
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
+        NSApp.windows.filter(\.isVisible).forEach { $0.orderFrontRegardless() }
     }
 
     override func recognizedEvents(_ sender: Any!) -> Int {

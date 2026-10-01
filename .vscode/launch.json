@@ -4,21 +4,21 @@
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:BijoyBangla}",
-            "name": "Debug BijoyBangla",
-            "target": "BijoyBangla",
+            "cwd": "${workspaceFolder:NuktaBangla}",
+            "name": "Debug NuktaBangla",
+            "target": "NuktaBangla",
             "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug BijoyBangla"
+            "preLaunchTask": "swift: Build Debug NuktaBangla"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:BijoyBangla}",
-            "name": "Release BijoyBangla",
-            "target": "BijoyBangla",
+            "cwd": "${workspaceFolder:NuktaBangla}",
+            "name": "Release NuktaBangla",
+            "target": "NuktaBangla",
             "configuration": "release",
-            "preLaunchTask": "swift: Build Release BijoyBangla"
+            "preLaunchTask": "swift: Build Release NuktaBangla"
         }
     ]
 }

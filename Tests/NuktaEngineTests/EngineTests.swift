@@ -1,5 +1,5 @@
 import XCTest
-@testable import BijoyEngine
+@testable import NuktaEngine
 
 /// `⌫` in a key string means backspace.
 private func type(_ keys: String) -> String {

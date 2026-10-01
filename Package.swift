@@ -2,18 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "BijoyBangla",
+    name: "NuktaBangla",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "BijoyBangla", targets: ["BijoyInputMethod"]),
+        .executable(name: "NuktaBangla", targets: ["NuktaInputMethod"]),
     ],
     targets: [
-        .target(name: "BijoyEngine"),
+        .target(name: "NuktaEngine"),
         .executableTarget(
-            name: "BijoyInputMethod",
-            dependencies: ["BijoyEngine"],
+            name: "NuktaInputMethod",
+            dependencies: ["NuktaEngine"],
             linkerSettings: [.linkedFramework("InputMethodKit")]
         ),
-        .testTarget(name: "BijoyEngineTests", dependencies: ["BijoyEngine"]),
+        .testTarget(name: "NuktaEngineTests", dependencies: ["NuktaEngine"]),
     ]
 )

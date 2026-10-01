@@ -1,19 +1,20 @@
 #!/bin/bash
-# Builds build/BijoyBangla.app (ad-hoc signed).
+# Builds build/NuktaBangla.app (ad-hoc signed).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release --product BijoyBangla
-BIN="$(swift build -c release --show-bin-path)/BijoyBangla"
+swift build -c release --product NuktaBangla
+BIN="$(swift build -c release --show-bin-path)/NuktaBangla"
 
 [ -f Resources/icon.tiff ] || swift scripts/make_icon.swift Resources/icon.tiff
+[ -f Resources/AppIcon.icns ] || swift scripts/make_icon.swift --app Resources/AppIcon.icns
 
-APP=build/BijoyBangla.app
+APP=build/NuktaBangla.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/BijoyBangla"
+cp "$BIN" "$APP/Contents/MacOS/NuktaBangla"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
-cp Resources/icon.tiff "$APP/Contents/Resources/icon.tiff"
+cp Resources/icon.tiff Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 # A real certificate keeps the Accessibility permission across rebuilds (ad-hoc signing
 # changes identity every build, so macOS would ask again).

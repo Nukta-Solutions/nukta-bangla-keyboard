@@ -1,13 +1,14 @@
-# Bijoy Bangla for macOS
+# নুকতা বাংলা (Nukta Bangla) for macOS
 
-Classic Bijoy keyboard as a native macOS input method, with Unicode output.
+The classic Bijoy keyboard layout as a native macOS input method, with Unicode output.
 
 ## Install
 ```
 scripts/install.sh
 ```
-Then go to System Settings → Keyboard → Input Sources → Edit… → + → Bangla → **Bijoy Bangla**.
-Run `scripts/install.sh` again after any code change.
+Then go to System Settings → Keyboard → Input Sources → Edit… → + → Bangla → **নুকতা বাংলা**.
+Run `scripts/install.sh` again after any code change. It also removes the old BijoyBangla.app; remove the old
+Bijoy Bangla entry from Input Sources if it's still listed.
 
 ## Typing (Avro 4.5.1 style: the default)
 Classic Bijoy order works as always. As in Avro, a pre-base kar (ি ে ৈ) **pressed twice** right after a
@@ -37,13 +38,15 @@ Backspace undoes the last key of the syllable you're still typing.
 ## Development
 ```
 swift test          # engine tests (keystrokes → exact Unicode)
-scripts/build.sh    # build/BijoyBangla.app
+scripts/build.sh    # build/NuktaBangla.app
 ```
-- `Sources/BijoyEngine`: key map and reordering logic (no AppKit).
-- `Sources/BijoyInputMethod`: the InputMethodKit layer.
+- `Sources/NuktaEngine`: key map and reordering logic (no AppKit).
+- `Sources/NuktaInputMethod`: the InputMethodKit layer.
   - `ClientWriter` puts text straight into the app and rewrites the last few characters to reorder them.
   - Where an app can't rewrite text (terminals, Google Docs, Facebook, VS Code's chat box), it shows the
     syllable in progress as underlined (marked) text and inserts it once it's finished.
+- `scripts/make_icon.swift` draws the নু icons: `Resources/icon.tiff` (menu bar) and, with `--app`,
+  `Resources/AppIcon.icns` (Finder). Delete one and rebuild to redraw it.
 - `scripts/build.sh` signs with your Apple Development certificate if you have one.
-- Diagnostics: `/usr/bin/log show --last 1h --predicate 'subsystem == "com.asifmahmud.inputmethod.BijoyBangla"'`
+- Diagnostics: `/usr/bin/log show --last 1h --predicate 'subsystem == "com.asifmahmud.inputmethod.NuktaBangla"'`
   (use the full path; in zsh, plain `log` is a built-in command).

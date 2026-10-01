@@ -1,11 +1,11 @@
 import Cocoa
 import InputMethodKit
 import os
-import BijoyEngine
+import NuktaEngine
 
 typealias Client = IMKTextInput & NSObjectProtocol
 
-let log = Logger(subsystem: "com.asifmahmud.inputmethod.BijoyBangla", category: "writer")
+let log = Logger(subsystem: "com.asifmahmud.inputmethod.NuktaBangla", category: "writer")
 
 /// Applies engine output to the client app. The mode is chosen per syllable:
 ///

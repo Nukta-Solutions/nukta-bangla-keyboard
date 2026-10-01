@@ -152,8 +152,8 @@ final class EngineTests: XCTestCase {
         // digits and symbols
         ("123", "১২৩"),
         ("$100", "৳১০০"),
-        ("j, K.", "ক, থ।"),
-        ("gfmd .", "আমি ।"),
+        ("j, K.", "ক, থ."),
+        ("gfmd .", "আমি ."),
         // F f → আ
         ("Ff", "আ"),
         ("Ffm", "আম"),

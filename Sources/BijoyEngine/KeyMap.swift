@@ -54,7 +54,6 @@ public enum KeyMap {
         "8": .literal("৮"), "9": .literal("৯"),
         "$": .literal("৳"), "&": .sign("\u{0981}"),     // ঁ
         "\\": .literal("ৎ"), "|": .sign("ঃ"),
-        ".": .literal("।"),
     ]
 
     public static func key(for character: Character) -> BanglaKey? {

@@ -100,16 +100,14 @@ final class BijoyInputController: IMKInputController {
               let key = KeyMap.key(for: character) else {
             // Space, Enter, Tab, arrows, punctuation…: finish the syllable, let the app handle the key.
             commitAll(client)
-            if let text = event.characters, !text.isEmpty, text.unicodeScalars.allSatisfy(Self.isPrintable) {
-                writer.noteAppTyped(text)
-            } else {
-                writer.forgetContext()
+            if !(event.characters ?? "").unicodeScalars.allSatisfy(Self.isPrintable) {
+                writer.forgetContext() // Enter, Tab, arrows…: the cursor may move
             }
             return false
         }
 
         if writer.apply(engine.process(key), to: client) != nil {
-            // The app can't rewrite text here: start a fresh (marked) syllable.
+            // The app can't rewrite text here: start a fresh (held-back) syllable.
             engine.reset()
             writer.reset()
             writer.apply(engine.process(key), to: client)
@@ -153,7 +151,7 @@ enum KeyCodes {
         46: ("m", "M"),
         18: ("1", "!"), 19: ("2", "@"), 20: ("3", "#"), 21: ("4", "$"), 23: ("5", "%"),
         22: ("6", "^"), 26: ("7", "&"), 28: ("8", "*"), 25: ("9", "("), 29: ("0", ")"),
-        42: ("\\", "|"), 47: (".", ">"),
+        42: ("\\", "|"),
     ]
 
     static func character(for keyCode: UInt16, shift: Bool) -> Character? {

@@ -7,20 +7,20 @@ typealias Client = IMKTextInput & NSObjectProtocol
 
 let log = Logger(subsystem: "com.asifmahmud.inputmethod.BijoyBangla", category: "writer")
 
-/// Applies engine output to the client app. The mode is chosen per syllable:
+/// Applies engine output to the client app.
 ///
-/// `.direct`: text goes straight into the document; reordering (কি, র্ম, আ…) rewrites the
-/// last few characters with `insertText(_:replacementRange:)` after checking they are still
-/// what we put there.
-/// `.marked`: the syllable in progress is shown as (underlined) marked text and inserted once
-/// finished. Used where earlier text can't be read back reliably: terminals, and editors like
-/// Google Docs that move typed text out of the input field straight away.
+/// `.direct`: text goes straight into the document; the few spellings that reorder text already
+/// on screen (reph: র্ম; a waiting kar + juktakkhor: ক্তি) rewrite the last few characters with
+/// `insertText(_:replacementRange:)` after checking they are still what we put there.
+/// `.holdBack`: for apps that can't rewrite (terminals, and editors like Facebook or Google Docs
+/// that ignore rewrites). The syllable in progress stays off screen and is inserted, finished,
+/// on the key that completes it. Nothing is ever highlighted or underlined.
 struct ClientWriter {
-    enum Mode { case direct, marked }
+    enum Mode { case direct, holdBack }
     enum Failure { case textChanged, unsupported }
 
     /// Apps known not to support replacementRange/attributedSubstring.
-    static let markedModeBundleIDs: Set<String> = [
+    static let holdBackBundleIDs: Set<String> = [
         "com.apple.Terminal",
         "com.googlecode.iterm2",
         "net.kovidgoyal.kitty",
@@ -31,33 +31,30 @@ struct ClientWriter {
         "com.github.wez.wezterm",
     ]
     /// Apps that can't report a cursor position, remembered for this login session.
-    static var detectedMarkedModeBundleIDs: Set<String> = []
+    static var detectedHoldBackBundleIDs: Set<String> = []
 
     private var bundleID: String?
     /// The app never supports rewriting (terminal, or no cursor position).
-    private var alwaysMarked = false
-    /// A read-back failed while rewriting during this activation: stop trusting this field.
+    private var alwaysHoldBack = false
+    /// A rewrite failed during this activation: stop rewriting in this field.
     private var untrusted = false
-    private var syllableMode: Mode = .direct
-    /// Exactly what is currently in the document (or marked text) for the syllable in progress.
+    private var mode: Mode { alwaysHoldBack || untrusted ? .holdBack : .direct }
+    /// Exactly what is currently in the document for the syllable in progress (direct mode).
     private var shown = ""
     /// After a rewrite: where the cursor must be if the app really did it. Checked on the next key,
     /// because some editors (Facebook) accept the rewrite but just insert at the cursor.
     private var pendingRewriteCheck: Int?
-    /// Last few characters we believe sit right before the cursor; empty when unknown.
-    private var context = ""
 
     mutating func configure(for client: Client) {
         bundleID = client.bundleIdentifier()
-        alwaysMarked = bundleID.map {
-            Self.markedModeBundleIDs.contains($0) || Self.detectedMarkedModeBundleIDs.contains($0)
+        alwaysHoldBack = bundleID.map {
+            Self.holdBackBundleIDs.contains($0) || Self.detectedHoldBackBundleIDs.contains($0)
         } ?? false
         untrusted = false
         shown = ""
-        context = ""
         pendingRewriteCheck = nil
-        let app = bundleID ?? "?", marked = alwaysMarked
-        log.debug("activate \(app, privacy: .public) alwaysMarked=\(marked)")
+        let app = bundleID ?? "?", holdBack = alwaysHoldBack
+        log.notice("activate \(app, privacy: .public) holdBack=\(holdBack)")
     }
 
     /// The syllable ended.
@@ -67,13 +64,7 @@ struct ClientWriter {
 
     /// The cursor may have moved (arrows, Enter, click, shortcut…).
     mutating func forgetContext() {
-        context = ""
         pendingRewriteCheck = nil
-    }
-
-    /// The app itself typed this (a key we passed through, like space or a comma).
-    mutating func noteAppTyped(_ text: String) {
-        remember(deleting: 0, inserting: text)
     }
 
     /// Returns nil on success.
@@ -86,47 +77,13 @@ struct ClientWriter {
                 return fail(.textChanged, "rewrite ignored (cursor \(location), expected \(expected))")
             }
         }
-        if shown.isEmpty {
-            syllableMode = chooseMode(for: client)
-        }
-        switch syllableMode {
-        case .marked:
-            applyMarked(out, to: client)
+        switch mode {
+        case .holdBack:
+            applyHoldBack(out, to: client)
             return nil
         case .direct:
             return applyDirect(out, to: client)
         }
-    }
-
-    /// Before a syllable starts: can we see what we typed last? If not, the app isn't
-    /// keeping our text where we can rewrite it, so compose this syllable as marked text.
-    private mutating func chooseMode(for client: Client) -> Mode {
-        if alwaysMarked || untrusted { return .marked }
-
-        let selection = client.selectedRange()
-        guard selection.location != NSNotFound else {
-            alwaysMarked = true
-            if let id = bundleID { Self.detectedMarkedModeBundleIDs.insert(id) }
-            let app = bundleID ?? "?"
-            log.info("probe: no cursor position in \(app, privacy: .public) → marked for session")
-            return .marked
-        }
-        guard !context.isEmpty else { return .direct }
-
-        let tail = String(String.UnicodeScalarView(context.unicodeScalars.suffix(2)))
-        let length = tail.utf16.count
-        guard selection.length == 0, selection.location >= length else {
-            log.debug("probe: selection \(selection.location),\(selection.length) can't hold context → marked")
-            context = ""
-            return .marked
-        }
-        let actual = client.attributedSubstring(from: NSRange(location: selection.location - length, length: length))?.string
-        guard actual == tail else {
-            log.debug("probe: read-back mismatch at \(selection.location) (got \(actual == nil ? "nil" : "\(actual!.utf16.count) units", privacy: .public)) → marked")
-            context = ""
-            return .marked
-        }
-        return .direct
     }
 
     private mutating func applyDirect(_ out: Output, to client: Client) -> Failure? {
@@ -137,7 +94,6 @@ struct ClientWriter {
             if !edit.inserted.isEmpty {
                 client.insertText(edit.inserted, replacementRange: notFound)
             }
-            remember(deleting: 0, inserting: edit.inserted)
             shown = TextDiff.remainder(of: shown + edit.inserted, after: out.committed)
             return nil
         }
@@ -145,6 +101,8 @@ struct ClientWriter {
         let deleteLength = edit.deleted.utf16.count
         let selection = client.selectedRange()
         guard selection.location != NSNotFound else {
+            alwaysHoldBack = true
+            if let id = bundleID { Self.detectedHoldBackBundleIDs.insert(id) }
             return fail(.unsupported, "no cursor position")
         }
         guard selection.length == 0, selection.location >= deleteLength else {
@@ -160,43 +118,26 @@ struct ClientWriter {
         }
         client.insertText(edit.inserted, replacementRange: range)
         pendingRewriteCheck = range.location + edit.inserted.utf16.count
-        remember(deleting: edit.deleted.unicodeScalars.count, inserting: edit.inserted)
         let doc = TextDiff.dropLast(edit.deleted.unicodeScalars.count, of: shown) + edit.inserted
         shown = TextDiff.remainder(of: doc, after: out.committed)
         return nil
     }
 
-    private mutating func applyMarked(_ out: Output, to client: Client) {
-        let notFound = NSRange(location: NSNotFound, length: 0)
+    /// Only finished text goes in; the syllable in progress waits in the engine.
+    private mutating func applyHoldBack(_ out: Output, to client: Client) {
         if !out.committed.isEmpty {
-            client.insertText(out.committed, replacementRange: notFound)
-            remember(deleting: 0, inserting: out.committed)
+            client.insertText(out.committed, replacementRange: NSRange(location: NSNotFound, length: 0))
         }
-        if !out.display.isEmpty || (out.committed.isEmpty && !shown.isEmpty) {
-            client.setMarkedText(
-                out.display,
-                selectionRange: NSRange(location: out.display.utf16.count, length: 0),
-                replacementRange: notFound
-            )
-        }
-        shown = out.display
+        shown = ""
     }
 
-    /// Rewriting failed mid-syllable: from now on this field gets marked text.
+    /// Rewriting failed: from now on this field holds syllables back instead.
     private mutating func fail(_ failure: Failure, _ reason: String) -> Failure {
         let app = bundleID ?? "?"
-        log.info("rewrite failed in \(app, privacy: .public): \(reason, privacy: .public) → marked for this field")
+        log.notice("rewrite failed in \(app, privacy: .public): \(reason, privacy: .public) → hold back in this field")
         untrusted = true
         shown = ""
-        context = ""
         pendingRewriteCheck = nil
         return failure
-    }
-
-    private mutating func remember(deleting count: Int, inserting text: String) {
-        var scalars = Array(context.unicodeScalars)
-        scalars.removeLast(min(count, scalars.count))
-        scalars.append(contentsOf: text.unicodeScalars)
-        context = String(String.UnicodeScalarView(scalars.suffix(8)))
     }
 }

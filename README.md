@@ -28,7 +28,7 @@ consonant attaches to that consonant. The first press shows nothing; the second 
 | `g f`, `g d`, `g s`, `g c`, `g x`, `g X` | আ ই উ এ ও ঔ (`g` + kar = full vowel); `F` অ, `F f` আ |
 | `j g d` | কই |
 | `g g` | visible hasanta (ক্‌) |
-| `Q`, `\|`, `&`, `\`, `$`, `G` or `.` | ং ঃ ঁ ৎ ৳ । |
+| `Q`, `\|`, `&`, `\`, `$`, `G` | ং ঃ ঁ ৎ ৳ । |
 
 A kar pressed **once** always waits for the next consonant: `j c V u` → কলেজ, `h d u W` → বজিয়.
 
@@ -46,4 +46,4 @@ scripts/build.sh    # build/BijoyBangla.app
 - `Sources/BijoyEngine`: key map and reordering logic (no AppKit).
 - `Sources/BijoyInputMethod`: the InputMethodKit layer.
   - `ClientWriter` puts text straight into the app and rewrites the last few characters to reorder them.
-  - In terminals, which can't rewrite text, it falls back to underlined marked text.
+  - In apps that can't rewrite text (terminals, Facebook, Google Docs), it holds the syllable back until it's finished; nothing is ever highlighted.

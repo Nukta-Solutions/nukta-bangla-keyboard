@@ -29,7 +29,7 @@ final class BijoyInputController: IMKInputController {
 
     override func menu() -> NSMenu! {
         let menu = NSMenu()
-        let mixed = NSMenuItem(title: "Mixed, Avro style  (c j or j c → কে)", action: #selector(selectMixed(_:)), keyEquivalent: "")
+        let mixed = NSMenuItem(title: "Avro style  (c j or j c c → কে)", action: #selector(selectMixed(_:)), keyEquivalent: "")
         mixed.state = Settings.karOrder == .mixed ? .on : .off
         let classic = NSMenuItem(title: "Classic Bijoy, strict  (c j → কে)", action: #selector(selectClassic(_:)), keyEquivalent: "")
         classic.state = Settings.karOrder == .classic ? .on : .off

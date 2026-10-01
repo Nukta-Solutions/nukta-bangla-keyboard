@@ -179,40 +179,56 @@ final class EngineTests: XCTestCase {
         }
     }
 
-    /// Mixed (default): both orders, as in Avro's Bijoy layout.
+    /// Mixed (default), as in Avro 4.5.1's Bijoy layout: a kar pressed once waits for the next
+    /// consonant (classic); pressed twice right after a consonant, it attaches to that consonant.
     let mixedCases: [(keys: String, expected: String)] = [
-        // কো / কৌ / কি / কে / কৈ, every way round
-        ("cjf", "কো"), ("jx", "কো"), ("jcf", "কো"), ("cjx", "কো"), ("jcx", "কো"),
-        ("cjX", "কৌ"), ("jX", "কৌ"), ("jcX", "কৌ"),
-        ("dj", "কি"), ("jd", "কি"),
-        ("cj", "কে"), ("jc", "কে"),
-        ("Cj", "কৈ"), ("jC", "কৈ"),
-        // বিজয় typed both ways
-        ("hduW", "বিজ\u{09DF}"),
+        // হেরেম, three ways
+        ("cicvm", "হেরেম"),
+        ("icccvm", "হেরেম"),
+        ("iccvccm", "হেরেম"),
+        // সিকিম, three ways
+        ("dndjm", "সিকিম"),
+        ("ndddjm", "সিকিম"),
+        ("nddjddm", "সিকিম"),
+        // কৈকৈ, two ways
+        ("CjCj", "কৈকৈ"),
+        ("jCCjCC", "কৈকৈ"),
+        // বিজয়
         ("dhuW", "বিজ\u{09DF}"),
-        // juktakkhor both ways
-        ("djgk", "ক্তি"), ("jgkd", "ক্তি"),
-        ("cjgNkz", "ক্ষেত্র"), ("jgNckz", "ক্ষেত্র"),
-        ("Mzcd", "শ্রে\u{09BF}"), ("McBd", "শেণি"),
-        ("Mzcbd", "শ্রেনি"), ("MzcBd", "শ্রেণি"), ("cMzdB", "শ্রেণি"),
-        // kar after a bare consonant attaches to it
-        ("jVcu", "কলেজ"), ("jcVu", "কেলজ"),
-        ("mbc", "মনে"), ("mcb", "মেন"),
-        ("hdlZfVW", "বিদ্যাল\u{09DF}"),
-        ("hfQVflcM", "বাংলাদেশ"), ("hfQVfclM", "বাংলাদেশ"),
+        ("hdduW", "বিজ\u{09DF}"),
+        ("hduW", "বজি\u{09DF}"),       // single press waits for জ
+        // ঘাসের
+        ("Ofcnv", "ঘাসের"),
+        ("Ofnccv", "ঘাসের"),
+        // কো / কৌ / কি / কে / কৈ
+        ("cjf", "কো"), ("jx", "কো"), ("jccf", "কো"), ("jcf", "কো"), ("cjx", "কো"),
+        ("cjX", "কৌ"), ("jX", "কৌ"), ("jccX", "কৌ"),
+        ("dj", "কি"), ("jdd", "কি"), ("jd", "কি"),
+        ("cj", "কে"), ("jcc", "কে"), ("jc", "কে"),
+        ("Cj", "কৈ"), ("jCC", "কৈ"),
+        // single press mid-word waits for the next consonant, double press attaches
+        ("jcVu", "কলেজ"), ("jVccu", "কলেজ"), ("jccVu", "কেলজ"),
+        ("mcb", "মনে"), ("mbcc", "মনে"), ("mbc", "মনে"),
+        ("hfQVfclM", "বাংলাদেশ"), ("hfQVflccM", "বাংলাদেশ"),
+        // juktakkhor
+        ("djgk", "ক্তি"), ("jgkdd", "ক্তি"), ("jgkd", "ক্তি"),
+        ("cjgNkz", "ক্ষেত্র"), ("jgNcckz", "ক্ষেত্র"),
+        ("cMzdB", "শ্রেণি"), ("MzccdB", "শ্রেণি"), ("MzccBdd", "শ্রেণি"),
+        ("dhlZfVW", "বিদ্যাল\u{09DF}"), ("hddlZfVW", "বিদ্যাল\u{09DF}"),
         ("LbZhfl", "ধন্যবাদ"),
-        // reph both ways, before or after the kar
-        ("jAd", "র্কি"), ("jdA", "র্কি"), ("djA", "র্কি"), ("vgjd", "র্কি"),
+        // reph
+        ("jAd", "র্কি"), ("jAdd", "র্কি"), ("jddA", "র্কি"), ("djA", "র্কি"), ("vgjd", "র্কি"),
         ("mAx", "র্মো"), ("mxA", "র্মো"),
         // other
-        ("gfmd", "আমি"),
+        ("gfmd", "আমি"), ("gfmdd", "আমি"),
         ("jgd", "কই"),
-        ("jc&", "কেঁ"),
+        ("jcc&", "কেঁ"), ("jc&", "কেঁ"),
         ("d", "\u{09BF}"),
         ("d ", "\u{09BF} "),
-        ("jcg", "কে্"),
+        ("jcc⌫", "ক"),
         ("jc⌫", "ক"),
         ("hd⌫u", "বজ"),
+        ("hdd⌫u", "বজ"),
     ]
 
     /// Strict classic: ি ে ৈ always wait for the next consonant.
@@ -297,7 +313,7 @@ final class EngineTests: XCTestCase {
                 XCTAssertEqual(typeWithEdits(w, order).rewrites, 0, "\(order) \(w) → \(typeWithEdits(w, order).doc)")
             }
         }
-        for w in ["jgNckz", "jgkd", "LbZhfl"] {  // ক্ষেত্র, mixed only
+        for w in ["jgNcckz", "jgkdd", "LbZhfl", "icccvm", "iccvccm", "nddjddm", "jCCjCC", "hdduW", "Ofnccv"] {  // mixed only
             XCTAssertEqual(typeWithEdits(w, .mixed).rewrites, 0, "mixed \(w) → \(typeWithEdits(w, .mixed).doc)")
         }
     }

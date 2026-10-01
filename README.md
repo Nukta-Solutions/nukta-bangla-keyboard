@@ -9,34 +9,34 @@ scripts/install.sh
 Then go to System Settings → Keyboard → Input Sources → Edit… → + → Bangla → **Bijoy Bangla**.
 Run `scripts/install.sh` again after any code change.
 
-## Typing (mixed, Avro style: the default)
-Both the classic Bijoy order and the kar-after-consonant order work, with no switching.
+## Typing (Avro 4.5.1 style: the default)
+Classic Bijoy order works as always. As in Avro, a pre-base kar (ি ে ৈ) **pressed twice** right after a
+consonant attaches to that consonant. The first press shows nothing; the second shows the kar.
 
 | You type | You get |
 |---|---|
-| `d j` or `j d` | কি |
-| `c j` or `j c` | কে |
-| `c j f`, `j c f` or `j x` | কো |
-| `c j X`, `j c X` or `j X` | কৌ |
-| `d h u W` or `h d u W` | বিজয় |
-| `d j g k` or `j g k d` | ক্তি (`g` = link ্ for juktakkhor) |
+| `c i c v m` · `i c c c v m` · `i c c v c c m` | হেরেম |
+| `d n d j m` · `n d d d j m` · `n d d j d d m` | সিকিম |
+| `C j C j` · `j C C j C C` | কৈকৈ |
+| `d h u W` · `h d d u W` | বিজয় |
+| `c j f` · `j c c f` · `j x` | কো |
+| `c j X` · `j c c X` · `j X` | কৌ |
+| `d j g k` · `j g k d d` | ক্তি (`g` = link ্ for juktakkhor) |
 | `j g N` | ক্ষ |
-| `m A` or `v g m` | র্ম (reph after the consonant, or র + g) |
+| `m A` · `v g m` | র্ম (reph after the consonant, or র + g) |
 | `o z` / `h Z` | গ্র / ব্য (`z` ্র, `Z` ্য) |
 | `g f`, `g d`, `g s`, `g c`, `g x`, `g X` | আ ই উ এ ও ঔ (`g` + kar = full vowel); `F` অ, `F f` আ |
 | `j g d` | কই |
 | `g g` | visible hasanta (ক্‌) |
 | `Q`, `\|`, `&`, `\`, `$`, `G` or `.` | ং ঃ ঁ ৎ ৳ । |
 
-**The one rule to know:** ি ে ৈ typed right after a consonant with no kar belong to that consonant.
-Anywhere else (word start, after a space or another kar), they wait for the next consonant.
-So কলেজ is `j V c u`, and `j c V u` gives কেলজ.
+A kar pressed **once** always waits for the next consonant: `j c V u` → কলেজ, `h d u W` → বজিয়.
 
 Backspace undoes the last key of the syllable you're still typing.
 
 ### Strict classic mode
-Choose **Classic Bijoy, strict** from the ব input menu if you want ি ে ৈ to always wait for the next consonant
-(`j c V u` → কলেজ). Switch back with **Mixed, Avro style**. Your choice is remembered.
+Choose **Classic Bijoy, strict** from the ব input menu to turn off the double-press rule.
+Switch back with **Avro style**. Your choice is remembered.
 
 ## Development
 ```

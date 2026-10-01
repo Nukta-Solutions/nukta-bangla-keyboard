@@ -20,8 +20,8 @@ public struct Output: Equatable {
 
 /// Where ি ে ৈ are typed relative to their consonant.
 public enum KarOrder: String {
-    /// Avro style: after a bare consonant the kar attaches to it (`j c` → কে); anywhere else
-    /// it waits for the next consonant (`c j` → কে).
+    /// Avro style: classic, plus pressing the kar twice right after a consonant attaches it to
+    /// that consonant (`c j` → কে and `j c c` → কে; `j c V` → কলে).
     case mixed
     /// Strict classic Bijoy: always before the consonant (`c j` → কে, `j c V` → কলে).
     case classic
@@ -49,6 +49,18 @@ public final class Engine {
 
     public func process(_ key: BanglaKey) -> Output {
         committed = ""
+
+        // Kar pressed once after a consonant: pressed again, it belongs to that consonant
+        // (j c c → কে); anything else, and it waits for the next consonant as usual (j c V → কলে).
+        if case .waitingKar(let k) = syllable.tokens.last {
+            syllable.removeLast()
+            if key == .kar(k) {
+                syllable.append(.preKar(k)) // rendered after the cluster
+                return Output(committed: committed, display: syllable.rendered, visible: syllable.visibleRendered)
+            }
+            commitSyllable()
+            syllable.append(.preKar(k))
+        }
 
         // অ waits one key: া makes it আ (F f), anything else leaves it as অ.
         if case .vowel = syllable.tokens.first {
@@ -105,7 +117,7 @@ public final class Engine {
                 committed += Syllable.independentVowels[k] ?? k
             } else if Syllable.preBaseKars.contains(k) {
                 if karOrder == .mixed && syllable.hasCluster && !syllable.isClusterClosed && !syllable.hasPreKar {
-                    syllable.append(.preKar(k)) // belongs to the consonant just typed; rendered after the cluster
+                    syllable.append(.waitingKar(k)) // a second press attaches it here; see top of process()
                 } else {
                     commitSyllable()
                     syllable.append(.preKar(k))
@@ -166,7 +178,13 @@ public final class Engine {
     }
 
     private func commitSyllable() {
-        committed += syllable.rendered
+        if case .waitingKar(let k) = syllable.tokens.last {
+            // Finished with a single press pending: same text classic would give (ক + ে = কে).
+            syllable.removeLast()
+            committed += syllable.rendered + k
+        } else {
+            committed += syllable.rendered
+        }
         syllable = Syllable()
     }
 }

@@ -11,6 +11,8 @@ struct Syllable: Equatable {
         case reph
         case sign(String)
         case vowel(String)
+        /// ি ে ৈ pressed once after a consonant; not shown until the next key decides.
+        case waitingKar(String)
     }
 
     static let hasantaChar = "\u{09CD}"
@@ -41,6 +43,11 @@ struct Syllable: Equatable {
         }
     }
 
+    static func isWaitingKar(_ token: Token) -> Bool {
+        if case .waitingKar = token { return true }
+        return false
+    }
+
     mutating func append(_ token: Token) { tokens.append(token) }
     mutating func removeLast() { tokens.removeLast() }
 
@@ -48,7 +55,7 @@ struct Syllable: Equatable {
     /// for the next key (it may turn into a full vowel: j g d → কই).
     var visibleRendered: String {
         guard hasCluster else { return "" }
-        guard lastIsHasanta else { return rendered }
+        guard lastIsHasanta || tokens.last.map(Self.isWaitingKar) == true else { return rendered }
         var withoutLink = self
         withoutLink.removeLast()
         return withoutLink.rendered
@@ -77,6 +84,7 @@ struct Syllable: Equatable {
             case .reph: reph = true
             case .sign(let s): signs += s
             case .vowel(let v): cluster += v
+            case .waitingKar: break
             }
         }
 

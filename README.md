@@ -46,4 +46,9 @@ scripts/build.sh    # build/BijoyBangla.app
 - `Sources/BijoyEngine`: key map and reordering logic (no AppKit).
 - `Sources/BijoyInputMethod`: the InputMethodKit layer.
   - `ClientWriter` puts text straight into the app and rewrites the last few characters to reorder them.
-  - In apps that can't rewrite text (terminals, Facebook, Google Docs), it holds the syllable back until it's finished; nothing is ever highlighted.
+  - Browsers, Electron apps (VS Code, Slack…) and terminals ignore rewrites, so there it presses Backspace for you,
+    the way Avro does on Windows (`Keystrokes.swift`). That needs **System Settings → Privacy & Security → Accessibility → Bijoy Bangla**.
+    Until it's allowed, those apps get the syllable held back until it's finished. Nothing is ever highlighted.
+- `scripts/build.sh` signs with your Apple Development certificate if you have one, so the permission survives rebuilds.
+- Diagnostics: `/usr/bin/log show --last 1h --predicate 'subsystem == "com.asifmahmud.inputmethod.BijoyBangla"'`
+  (use the full path; in zsh, plain `log` is a built-in command).

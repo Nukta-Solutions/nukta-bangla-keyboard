@@ -9,52 +9,59 @@ let log = Logger(subsystem: "com.asifmahmud.inputmethod.BijoyBangla", category: 
 
 /// Applies engine output to the client app.
 ///
-/// `.direct`: text goes straight into the document; the few spellings that reorder text already
-/// on screen (reph: র্ম; a waiting kar + juktakkhor: ক্তি) rewrite the last few characters with
-/// `insertText(_:replacementRange:)` after checking they are still what we put there.
-/// `.holdBack`: for apps that can't rewrite (terminals, and editors like Facebook or Google Docs
-/// that ignore rewrites). The syllable in progress stays off screen and is inserted, finished,
-/// on the key that completes it. Nothing is ever highlighted or underlined.
+/// Text normally goes straight into the document as pure appends. The few spellings that
+/// reorder text already on screen (reph: র্ম; a single-press kar + juktakkhor: চ্ছে) need a
+/// rewrite, done one of two ways:
+/// - native apps: `insertText(_:replacementRange:)`, after checking the text is still ours;
+/// - web editors, Electron apps and terminals, which ignore that (they add instead of replace):
+///   Avro-style Backspaces via `Keystrokes`.
+/// Without the Accessibility permission those apps fall back to `.holdBack`: the syllable in
+/// progress stays off screen and is inserted finished. Nothing is ever highlighted.
 struct ClientWriter {
     enum Mode { case direct, holdBack }
     enum Failure { case textChanged, unsupported }
 
-    /// Apps known not to support replacementRange/attributedSubstring.
-    static let holdBackBundleIDs: Set<String> = [
-        "com.apple.Terminal",
-        "com.googlecode.iterm2",
-        "net.kovidgoyal.kitty",
-        "com.mitchellh.ghostty",
-        "dev.warp.Warp-Stable",
-        "org.alacritty",
-        "io.alacritty",
-        "com.github.wez.wezterm",
+    /// Apps whose text boxes don't honour replacementRange.
+    static let keystrokeBundleIDs: Set<String> = [
+        // terminals
+        "com.apple.Terminal", "com.googlecode.iterm2", "net.kovidgoyal.kitty", "com.mitchellh.ghostty",
+        "dev.warp.Warp-Stable", "org.alacritty", "io.alacritty", "com.github.wez.wezterm",
+        // browsers (Facebook, Google Docs, Messenger… run in these)
+        "com.google.Chrome", "com.google.Chrome.canary", "com.google.Chrome.beta", "org.chromium.Chromium",
+        "com.microsoft.edgemac", "com.brave.Browser", "company.thebrowser.Browser", "com.operasoftware.Opera",
+        "com.vivaldi.Vivaldi", "com.apple.Safari", "com.apple.SafariTechnologyPreview", "org.mozilla.firefox",
     ]
-    /// Apps that can't report a cursor position, remembered for this login session.
-    static var detectedHoldBackBundleIDs: Set<String> = []
+    /// Apps found ignoring a rewrite, remembered for this login session.
+    static var detectedKeystrokeBundleIDs: Set<String> = []
 
     private var bundleID: String?
-    /// The app never supports rewriting (terminal, or no cursor position).
-    private var alwaysHoldBack = false
-    /// A rewrite failed during this activation: stop rewriting in this field.
-    private var untrusted = false
-    private var mode: Mode { alwaysHoldBack || untrusted ? .holdBack : .direct }
-    /// Exactly what is currently in the document for the syllable in progress (direct mode).
+    /// Rewrite with Backspaces instead of replacementRange in this app.
+    private var rewriteByKeystrokes = false
+    private var mode: Mode {
+        rewriteByKeystrokes && !Keystrokes.shared.isTrusted ? .holdBack : .direct
+    }
+    /// Exactly what is currently in the document for the syllable in progress.
     private var shown = ""
-    /// After a rewrite: where the cursor must be if the app really did it. Checked on the next key,
-    /// because some editors (Facebook) accept the rewrite but just insert at the cursor.
+    /// After a replacementRange rewrite: where the cursor must be if the app really did it.
+    /// Checked on the next key; a mismatch means this app ignores rewrites.
     private var pendingRewriteCheck: Int?
 
     mutating func configure(for client: Client) {
         bundleID = client.bundleIdentifier()
-        alwaysHoldBack = bundleID.map {
-            Self.holdBackBundleIDs.contains($0) || Self.detectedHoldBackBundleIDs.contains($0)
-        } ?? false
-        untrusted = false
+        rewriteByKeystrokes = bundleID.map(Self.needsKeystrokes) ?? false
+        if rewriteByKeystrokes { Keystrokes.shared.requestTrustIfNeeded() }
         shown = ""
         pendingRewriteCheck = nil
-        let app = bundleID ?? "?", holdBack = alwaysHoldBack
-        log.notice("activate \(app, privacy: .public) holdBack=\(holdBack)")
+        let app = bundleID ?? "?", keys = rewriteByKeystrokes, trusted = Keystrokes.shared.isTrusted
+        log.notice("activate \(app, privacy: .public) keystrokes=\(keys) trusted=\(trusted)")
+    }
+
+    /// Listed, already caught ignoring a rewrite, or built on Electron (VS Code, Slack, Discord…).
+    private static func needsKeystrokes(_ id: String) -> Bool {
+        if keystrokeBundleIDs.contains(id) || detectedKeystrokeBundleIDs.contains(id) { return true }
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return false }
+        let electron = app.appendingPathComponent("Contents/Frameworks/Electron Framework.framework")
+        return FileManager.default.fileExists(atPath: electron.path)
     }
 
     /// The syllable ended.
@@ -98,11 +105,19 @@ struct ClientWriter {
             return nil
         }
 
+        let doc = TextDiff.dropLast(edit.deleted.unicodeScalars.count, of: shown) + edit.inserted
+
+        if rewriteByKeystrokes {
+            guard Keystrokes.shared.replace(deleting: edit.deleted.unicodeScalars.count, with: edit.inserted) else {
+                return fail(.unsupported, "can't post Backspaces")
+            }
+            shown = TextDiff.remainder(of: doc, after: out.committed)
+            return nil
+        }
+
         let deleteLength = edit.deleted.utf16.count
         let selection = client.selectedRange()
         guard selection.location != NSNotFound else {
-            alwaysHoldBack = true
-            if let id = bundleID { Self.detectedHoldBackBundleIDs.insert(id) }
             return fail(.unsupported, "no cursor position")
         }
         guard selection.length == 0, selection.location >= deleteLength else {
@@ -118,7 +133,6 @@ struct ClientWriter {
         }
         client.insertText(edit.inserted, replacementRange: range)
         pendingRewriteCheck = range.location + edit.inserted.utf16.count
-        let doc = TextDiff.dropLast(edit.deleted.unicodeScalars.count, of: shown) + edit.inserted
         shown = TextDiff.remainder(of: doc, after: out.committed)
         return nil
     }
@@ -131,11 +145,14 @@ struct ClientWriter {
         shown = ""
     }
 
-    /// Rewriting failed: from now on this field holds syllables back instead.
+    /// Rewriting with replacementRange failed: from now on this app rewrites with Backspaces
+    /// (or holds syllables back until the Accessibility permission is granted).
     private mutating func fail(_ failure: Failure, _ reason: String) -> Failure {
         let app = bundleID ?? "?"
-        log.notice("rewrite failed in \(app, privacy: .public): \(reason, privacy: .public) → hold back in this field")
-        untrusted = true
+        log.notice("rewrite failed in \(app, privacy: .public): \(reason, privacy: .public) → keystrokes for this app")
+        rewriteByKeystrokes = true
+        if let id = bundleID { Self.detectedKeystrokeBundleIDs.insert(id) }
+        Keystrokes.shared.requestTrustIfNeeded()
         shown = ""
         pendingRewriteCheck = nil
         return failure

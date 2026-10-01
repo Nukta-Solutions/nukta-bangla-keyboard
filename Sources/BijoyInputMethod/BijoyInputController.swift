@@ -59,6 +59,20 @@ final class BijoyInputController: IMKInputController {
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, let client = sender as? Client else { return false }
 
+        // Our own Avro-style Backspaces pass straight to the app; the marker after them means
+        // they are done, so the corrected text goes in now.
+        if event.type == .keyDown {
+            if event.keyCode == Keystrokes.deleteKeyCode, Keystrokes.shared.consumeBackspace() {
+                return false
+            }
+            if event.keyCode == Keystrokes.markerKeyCode {
+                if let text = Keystrokes.shared.consumeMarker(), !text.isEmpty {
+                    client.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+                }
+                return true
+            }
+        }
+
         // The mode may have been changed from another app's controller.
         if engine.karOrder != Settings.karOrder {
             commitAll(client)

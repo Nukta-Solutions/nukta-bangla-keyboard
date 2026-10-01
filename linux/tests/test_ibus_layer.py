@@ -68,7 +68,7 @@ class IBusLayerTests(unittest.TestCase):
     def test_backspace_undoes_one_keystroke_then_goes_to_the_application(self):
         e = self.type_keys("dj")
         self.assertTrue(e.do_process_key_event(IBus.KEY_BackSpace, 14, 0))
-        self.assertEqual(e.preedit, "ি")
+        self.assertEqual(e.preedit, "")     # back to a lone ি, which is held back as usual
         self.assertTrue(e.do_process_key_event(IBus.KEY_BackSpace, 14, 0))
         self.assertEqual(e.preedit, "")
         # Nothing of ours is left: the application deletes its own text.
@@ -95,3 +95,53 @@ class IBusLayerTests(unittest.TestCase):
     def test_non_bijoy_key_is_passed_through(self):
         e = self.engine
         self.assertFalse(e.do_process_key_event(ord("+"), 78, 0))
+
+
+class PendingKarIsHeldBackTests(unittest.TestCase):
+    """A kar with no consonant to sit on yet stays off screen, as it does on macOS.
+
+    Typing প্রা and then ে used to put an orphan ে on screen next to the finished word
+    (`প্রাে`), which looks like the kar jumped to the wrong place.
+    """
+
+    def setUp(self):
+        self.engine = NuktaBanglaEngine()
+
+    def type_keys(self, keys):
+        for ch in keys:
+            press(self.engine, ch)
+        return self.engine
+
+    def test_kar_after_a_finished_syllable_shows_nothing_until_the_next_letter(self):
+        e = self.type_keys("rzf")                  # প্রা
+        self.assertEqual(e.preedit, "প্রা")
+        press(e, "c")                              # ে — nowhere to sit yet
+        self.assertEqual(e.committed, "প্রা")
+        self.assertEqual(e.preedit, "")            # not "ে" beside the word
+        press(e, "B")                              # ণ — now the kar has its consonant
+        self.assertEqual(e.preedit, "ণে")
+        e.do_focus_out()
+        self.assertEqual(e.committed, "প্রাণে")
+
+    def test_a_pending_kar_is_still_committed_when_the_word_ends(self):
+        e = self.type_keys("rzf")
+        press(e, "c")
+        e.do_focus_out()                           # space, click, anything that finishes
+        self.assertEqual(e.committed, "প্রাে")     # the keystroke is not lost, just not shown early
+
+    def test_classic_order_at_the_start_of_a_word(self):
+        e = self.engine
+        press(e, "c")
+        self.assertEqual(e.preedit, "")            # macOS shows nothing here too
+        for ch in "rzvBf":                         # প্রেরণা
+            press(e, ch)
+        e.do_focus_out()
+        self.assertEqual(e.committed, "প্রেরণা")
+
+    def test_trailing_hasanta_is_held_back(self):
+        e = self.type_keys("u")                    # জ
+        press(e, "g")                              # ্ — may yet become a full vowel (j g d → কই)
+        self.assertEqual(e.preedit, "জ")
+        press(e, "d")
+        e.do_focus_out()
+        self.assertEqual(e.committed, "জই")

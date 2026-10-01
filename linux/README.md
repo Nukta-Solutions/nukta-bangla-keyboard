@@ -54,6 +54,10 @@ Two differences from macOS, both because IBus gives us a real preedit:
   already in the document is ever rewritten. The macOS `ClientWriter` dance — inserting text
   directly and rewriting the last few characters, with a marked-text fallback for apps that ignore
   rewrites — has no equivalent here, and neither do its per-application quirks.
+- A kar or ্ that has no consonant to sit on yet is held back from the preedit, the same way the
+  macOS build keeps it off screen (`Output.visible`, not `Output.display`): typing প্রা and then ে
+  shows nothing extra until the next letter says where the ে belongs, rather than parking an orphan
+  ে beside the finished word.
 - Physical key codes are read from the event (`US_LAYOUT` in `ibus_engine.py`), so Bijoy works
   whatever XKB layout is underneath, exactly as the macOS build does with its key-code map.
 

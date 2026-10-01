@@ -116,10 +116,16 @@ class NuktaBanglaEngine(IBus.Engine):
     # MARK: output
 
     def _show(self, out):
-        """Puts finished text into the application and the syllable in progress in the preedit."""
+        """Puts finished text into the application and the syllable in progress in the preedit.
+
+        The preedit shows `visible`, not `display`: a kar or ্ with no consonant to sit on yet
+        (``প্রা`` then ে, waiting to see which letter it belongs to) is held back, exactly as the
+        macOS build holds it back, instead of showing an orphan ``ে`` beside the last word. The key
+        is not lost — it reappears as soon as the next letter decides where it goes.
+        """
         if out.committed:
             self.commit_text(IBus.Text.new_from_string(out.committed))
-        self._set_preedit(out.display)
+        self._set_preedit(out.visible)
 
     def _flush(self):
         """Finishes the syllable in progress, as a click or a non-Bijoy key does."""

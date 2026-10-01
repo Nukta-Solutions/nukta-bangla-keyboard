@@ -18,25 +18,15 @@ public struct Output: Equatable {
     }
 }
 
-/// Where ি ে ৈ are typed relative to their consonant.
-public enum KarOrder: String {
-    /// Avro style: classic, plus pressing the kar twice right after a consonant attaches it to
-    /// that consonant (`c j` → কে and `j c c` → কে; `j c V` → কলে).
-    case mixed
-    /// Strict classic Bijoy: always before the consonant (`c j` → কে, `j c V` → কলে).
-    case classic
-}
-
 /// Bijoy state machine. Pure logic, no AppKit.
 public final class Engine {
     private var syllable = Syllable()
     private var committed = ""
 
-    public var karOrder: KarOrder
-
-    public init(karOrder: KarOrder = .mixed) {
-        self.karOrder = karOrder
-    }
+    /// ি ে ৈ work as in Avro 4.5.1's Bijoy layout: pressed once they wait for the next
+    /// consonant (classic, `c j` → কে); pressed twice right after a consonant they attach to it
+    /// (`j c c` → কে).
+    public init() {}
 
     public var isComposing: Bool { !syllable.isEmpty }
     public var display: String { syllable.rendered }
@@ -116,7 +106,7 @@ public final class Engine {
                 commitSyllable()
                 committed += Syllable.independentVowels[k] ?? k
             } else if Syllable.preBaseKars.contains(k) {
-                if karOrder == .mixed && syllable.hasCluster && !syllable.isClusterClosed && !syllable.hasPreKar {
+                if syllable.hasCluster && !syllable.isClusterClosed && !syllable.hasPreKar {
                     syllable.append(.waitingKar(k)) // a second press attaches it here; see top of process()
                 } else {
                     commitSyllable()

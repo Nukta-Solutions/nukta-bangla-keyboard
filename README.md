@@ -34,10 +34,6 @@ A kar pressed **once** always waits for the next consonant: `j c V u` → কল
 
 Backspace undoes the last key of the syllable you're still typing.
 
-### Strict classic mode
-Choose **Classic Bijoy, strict** from the ব input menu to turn off the double-press rule.
-Switch back with **Avro style**. Your choice is remembered.
-
 ## Development
 ```
 swift test          # engine tests (keystrokes → exact Unicode)

@@ -10,7 +10,6 @@ final class BijoyInputController: IMKInputController {
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
         engine.reset()
-        engine.karOrder = Settings.karOrder
         if let client = sender as? Client {
             writer.configure(for: client)
         }
@@ -25,45 +24,12 @@ final class BijoyInputController: IMKInputController {
         commitAll(sender as? Client)
     }
 
-    // MARK: Input menu (the ব icon)
-
-    override func menu() -> NSMenu! {
-        let menu = NSMenu()
-        let mixed = NSMenuItem(title: "Avro style  (c j or j c c → কে)", action: #selector(selectMixed(_:)), keyEquivalent: "")
-        mixed.state = Settings.karOrder == .mixed ? .on : .off
-        let classic = NSMenuItem(title: "Classic Bijoy, strict  (c j → কে)", action: #selector(selectClassic(_:)), keyEquivalent: "")
-        classic.state = Settings.karOrder == .classic ? .on : .off
-        menu.addItem(mixed)
-        menu.addItem(classic)
-        return menu
-    }
-
-    @objc func selectMixed(_ sender: Any?) {
-        setKarOrder(.mixed)
-    }
-
-    @objc func selectClassic(_ sender: Any?) {
-        setKarOrder(.classic)
-    }
-
-    private func setKarOrder(_ order: KarOrder) {
-        commitAll(client() as? Client)
-        Settings.karOrder = order
-        engine.karOrder = order
-    }
-
     override func recognizedEvents(_ sender: Any!) -> Int {
         Int(NSEvent.EventTypeMask([.keyDown, .leftMouseDown, .rightMouseDown]).rawValue)
     }
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, let client = sender as? Client else { return false }
-
-        // The mode may have been changed from another app's controller.
-        if engine.karOrder != Settings.karOrder {
-            commitAll(client)
-            engine.karOrder = Settings.karOrder
-        }
 
         guard event.type == .keyDown else {
             // A click may move the cursor: finish the syllable.
@@ -128,15 +94,6 @@ final class BijoyInputController: IMKInputController {
             writer.apply(out, to: client)
         }
         writer.reset()
-    }
-}
-
-/// Preferences, stored in the input method's own user defaults.
-enum Settings {
-    private static let karOrderKey = "karOrder"
-
-    static var karOrder: KarOrder = UserDefaults.standard.string(forKey: karOrderKey).flatMap(KarOrder.init) ?? .mixed {
-        didSet { UserDefaults.standard.set(karOrder.rawValue, forKey: karOrderKey) }
     }
 }
 

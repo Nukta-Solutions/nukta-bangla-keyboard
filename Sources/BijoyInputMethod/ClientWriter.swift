@@ -172,14 +172,15 @@ struct ClientWriter {
             client.insertText(out.committed, replacementRange: notFound)
             remember(deleting: 0, inserting: out.committed)
         }
-        if !out.display.isEmpty || (out.committed.isEmpty && !shown.isEmpty) {
+        // `visible`, not `display`: a waiting kar would sit beside the previous letter.
+        if !out.visible.isEmpty || (out.committed.isEmpty && !shown.isEmpty) {
             client.setMarkedText(
-                out.display,
-                selectionRange: NSRange(location: out.display.utf16.count, length: 0),
+                out.visible,
+                selectionRange: NSRange(location: out.visible.utf16.count, length: 0),
                 replacementRange: notFound
             )
         }
-        shown = out.display
+        shown = out.visible
     }
 
     /// Rewriting failed mid-syllable: from now on this field gets marked text.

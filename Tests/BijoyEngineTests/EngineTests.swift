@@ -2,8 +2,8 @@ import XCTest
 @testable import BijoyEngine
 
 /// `⌫` in a key string means backspace.
-private func type(_ keys: String, _ order: KarOrder = .mixed) -> String {
-    let engine = Engine(karOrder: order)
+private func type(_ keys: String) -> String {
+    let engine = Engine()
     var doc = ""
     for ch in keys {
         if ch == "⌫" {
@@ -24,8 +24,8 @@ private func type(_ keys: String, _ order: KarOrder = .mixed) -> String {
 /// Same, but plays the edits through TextDiff the way the direct-insert writer does,
 /// keeping the document exactly as an app would hold it. `rewrites` counts edits that had
 /// to replace text already on screen (the ones some editors ignore).
-private func typeWithEdits(_ keys: String, _ order: KarOrder = .mixed) -> (doc: String, rewrites: Int) {
-    let engine = Engine(karOrder: order)
+private func typeWithEdits(_ keys: String) -> (doc: String, rewrites: Int) {
+    let engine = Engine()
     var doc = ""
     var shown = ""
     var rewrites = 0
@@ -57,8 +57,8 @@ private func typeWithEdits(_ keys: String, _ order: KarOrder = .mixed) -> (doc: 
 }
 
 /// Compared with canonical equivalence: on screen ো may be ে + া.
-private func typeViaDiffs(_ keys: String, _ order: KarOrder = .mixed) -> String {
-    typeWithEdits(keys, order).doc
+private func typeViaDiffs(_ keys: String) -> String {
+    typeWithEdits(keys).doc
 }
 
 private func scalars(_ s: String) -> String {
@@ -171,10 +171,10 @@ final class EngineTests: XCTestCase {
     ]
 
     func testWords() {
-        for order in [KarOrder.mixed, .classic] {
+        do {
             for c in cases {
-                let got = type(c.keys, order)
-                XCTAssertEqual(scalars(got), scalars(c.expected), "\(order) keys: \(c.keys) → \(got), expected \(c.expected)")
+                let got = type(c.keys)
+                XCTAssertEqual(scalars(got), scalars(c.expected), "keys: \(c.keys) → \(got), expected \(c.expected)")
             }
         }
     }
@@ -197,6 +197,8 @@ final class EngineTests: XCTestCase {
         ("dhuW", "বিজ\u{09DF}"),
         ("hdduW", "বিজ\u{09DF}"),
         ("hduW", "বজি\u{09DF}"),       // single press waits for জ
+        // দেহের, typed classic or with double presses
+        ("clciv", "দেহের"), ("cliccv", "দেহের"), ("lcciccv", "দেহের"),
         // ঘাসের
         ("Ofcnv", "ঘাসের"),
         ("Ofnccv", "ঘাসের"),
@@ -231,33 +233,18 @@ final class EngineTests: XCTestCase {
         ("hdd⌫u", "বজ"),
     ]
 
-    /// Strict classic: ি ে ৈ always wait for the next consonant.
-    let classicCases: [(keys: String, expected: String)] = [
-        ("jcVu", "কলেজ"),
-        ("mcb", "মনে"),
-        ("hduW", "বজি\u{09DF}"),
-        ("jc ", "ক\u{09C7} "),
-    ]
-
     func testMixedMode() {
         for c in mixedCases {
-            XCTAssertEqual(scalars(type(c.keys, .mixed)), scalars(c.expected), "keys: \(c.keys) → \(type(c.keys, .mixed))")
-            XCTAssertEqual(typeViaDiffs(c.keys, .mixed), c.expected, "keys: \(c.keys) (diff path)")
-        }
-    }
-
-    func testClassicMode() {
-        for c in classicCases {
-            XCTAssertEqual(scalars(type(c.keys, .classic)), scalars(c.expected), "keys: \(c.keys) → \(type(c.keys, .classic))")
-            XCTAssertEqual(typeViaDiffs(c.keys, .classic), c.expected, "keys: \(c.keys) (diff path)")
+            XCTAssertEqual(scalars(type(c.keys)), scalars(c.expected), "keys: \(c.keys) → \(type(c.keys))")
+            XCTAssertEqual(typeViaDiffs(c.keys), c.expected, "keys: \(c.keys) (diff path)")
         }
     }
 
     func testDirectInsertDiffsProduceSameText() {
-        for order in [KarOrder.mixed, .classic] {
+        do {
             for c in cases {
-                let got = typeViaDiffs(c.keys, order)
-                XCTAssertEqual(got, c.expected, "\(order) keys: \(c.keys) (diff path)")
+                let got = typeViaDiffs(c.keys)
+                XCTAssertEqual(got, c.expected, "keys: \(c.keys) (diff path)")
             }
         }
     }
@@ -308,13 +295,13 @@ final class EngineTests: XCTestCase {
             "gfmfv ncfbfv hfQVf",
             "vgm", "jgkd", "ugug", "ugughV",  // র্ম ক্তি, juktakkhor in Unicode order
         ]
-        for order in [KarOrder.mixed, .classic] {
+        do {
             for w in words {
-                XCTAssertEqual(typeWithEdits(w, order).rewrites, 0, "\(order) \(w) → \(typeWithEdits(w, order).doc)")
+                XCTAssertEqual(typeWithEdits(w).rewrites, 0, "\(w) → \(typeWithEdits(w).doc)")
             }
         }
-        for w in ["jgNcckz", "jgkdd", "LbZhfl", "icccvm", "iccvccm", "nddjddm", "jCCjCC", "hdduW", "Ofnccv"] {  // mixed only
-            XCTAssertEqual(typeWithEdits(w, .mixed).rewrites, 0, "mixed \(w) → \(typeWithEdits(w, .mixed).doc)")
+        for w in ["jgNcckz", "jgkdd", "LbZhfl", "icccvm", "iccvccm", "nddjddm", "jCCjCC", "hdduW", "Ofnccv"] {  // double press
+            XCTAssertEqual(typeWithEdits(w).rewrites, 0, "\(w) → \(typeWithEdits(w).doc)")
         }
     }
 

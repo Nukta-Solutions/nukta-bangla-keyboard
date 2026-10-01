@@ -35,6 +35,15 @@ A kar pressed **once** always waits for the next consonant: `j c V u` → কল
 
 Backspace undoes the last key of the syllable you're still typing.
 
+## Sharing with friends
+```
+scripts/package.sh   # build/NuktaBangla-<version>.pkg + build/INSTALL.txt
+```
+Send both files. The package runs on Apple Silicon and Intel Macs (macOS 13+) and installs into
+`/Library/Input Methods`. It isn't notarized, so the first open needs System Settings → Privacy & Security →
+Open Anyway; [INSTALL.txt](INSTALL.txt) walks through it in Bangla. Bump `CFBundleShortVersionString` in
+Info.plist before sharing a new version.
+
 ## Development
 ```
 swift test          # engine tests (keystrokes → exact Unicode)

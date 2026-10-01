@@ -1,0 +1,24 @@
+নুকতা বাংলা — Mac-এ ইনস্টল করার নিয়ম
+(macOS 13 Ventura বা নতুন; Apple Silicon ও Intel দুই ধরনের Mac-এই চলে)
+
+১. NuktaBangla-x.x.x.pkg ফাইলটিতে ডাবল-ক্লিক করুন।
+   "can't be opened" / "Apple could not verify" লেখা এলে Done চাপুন।
+
+২. System Settings → Privacy & Security খুলুন, নিচে স্ক্রল করুন।
+   NuktaBangla-এর পাশে "Open Anyway" চাপুন, Mac-এর পাসওয়ার্ড দিন।
+   (এটা শুধু প্রথমবার লাগবে।)
+
+৩. Installer-এ Continue → Install চাপুন, পাসওয়ার্ড দিন।
+
+৪. একবার Log Out করে আবার Log In করুন (Apple মেনু → Log Out)।
+
+৫. System Settings → Keyboard → Input Sources → Edit… → + চাপুন।
+   বাঁ দিকে Bangla বেছে নিন → "নুকতা বাংলা" → Add।
+
+এখন মেনু বারের কিবোর্ড আইকন থেকে, বা Control + Space (অথবা fn/🌐) চেপে
+ABC আর নুকতা বাংলার মধ্যে বদলাতে পারবেন।
+
+নতুন ভার্সন পেলে: শুধু নতুন .pkg ফাইলটি আবার চালান (১ থেকে ৩)।
+
+মুছে ফেলতে: Input Sources থেকে নুকতা বাংলা সরান, তারপর Finder-এ
+Go → Go to Folder… → /Library/Input Methods খুলে NuktaBangla.app Trash-এ ফেলুন।

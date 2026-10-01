@@ -1,16 +1,19 @@
-// Draws the icons: a boxed "নু".
-//   swift scripts/make_icon.swift Resources/icon.tiff           menu-bar icon: 16pt template TIFF, @1x and @2x
-//   swift scripts/make_icon.swift --app Resources/AppIcon.icns  app icon for Finder: white box on green
+// Draws the icons: "নু." on a rounded badge, like the system's "A" for ABC.
+//   swift scripts/make_icon.swift Resources/icon.tiff           menu-bar icon: template TIFF, @1x and @2x
+//   swift scripts/make_icon.swift --app Resources/AppIcon.icns  app icon for Finder: white badge on a fire gradient
 import AppKit
 
-let glyph = "নু"
-let font = "BanglaSangamMN-Bold"
+let glyph = "নু."
+let font = "KohinoorBangla-Semibold"   // ships with macOS
+
+/// Menu-bar icon size in points: a little wider than tall, like the system's input source badges.
+let menuSize = NSSize(width: 20, height: 16)
 
 /// Draws `glyph` centred on its ink (not its very tall line box) at `centre`, `inkHeight` tall.
 func drawGlyph(inkHeight: CGFloat, centre: CGPoint, color: NSColor) {
     func line(_ size: CGFloat) -> CTLine {
         CTLineCreateWithAttributedString(NSAttributedString(string: glyph, attributes: [
-            .font: NSFont(name: font, size: size) ?? NSFont.systemFont(ofSize: size, weight: .bold),
+            .font: NSFont(name: font, size: size) ?? NSFont.systemFont(ofSize: size, weight: .semibold),
             .foregroundColor: color,
         ]))
     }
@@ -22,13 +25,13 @@ func drawGlyph(inkHeight: CGFloat, centre: CGPoint, color: NSColor) {
     CTLineDraw(l, ctx)
 }
 
-/// A square bitmap of `pixels` px that draws in a `points`-wide coordinate space.
-func rep(pixels: Int, points: CGFloat, draw: () -> Void) -> NSBitmapImageRep {
+/// A bitmap of `pixels` that draws in a `points`-sized coordinate space.
+func rep(pixels: NSSize, points: NSSize, draw: () -> Void) -> NSBitmapImageRep {
     let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+        bitmapDataPlanes: nil, pixelsWide: Int(pixels.width), pixelsHigh: Int(pixels.height),
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-    rep.size = NSSize(width: points, height: points)
+    rep.size = points
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     draw()
@@ -36,25 +39,30 @@ func rep(pixels: Int, points: CGFloat, draw: () -> Void) -> NSBitmapImageRep {
     return rep
 }
 
+/// A filled badge with the glyph cut out; macOS tints it for light and dark menu bars.
 func drawMenuIcon() {
-    let box = NSBezierPath(roundedRect: NSRect(x: 0.75, y: 0.75, width: 14.5, height: 14.5), xRadius: 3, yRadius: 3)
-    box.lineWidth = 1.2
-    NSColor.black.setStroke()
-    box.stroke()
-    drawGlyph(inkHeight: 10, centre: CGPoint(x: 8, y: 8), color: .black)
+    let badge = NSRect(origin: .zero, size: menuSize).insetBy(dx: 0.5, dy: 1)
+    NSColor.black.setFill()
+    NSBezierPath(roundedRect: badge, xRadius: 3.5, yRadius: 3.5).fill()
+    let ctx = NSGraphicsContext.current!.cgContext
+    ctx.setBlendMode(.clear)
+    drawGlyph(inkHeight: 9.5, centre: CGPoint(x: badge.midX, y: badge.midY), color: .black)
+    ctx.setBlendMode(.normal)
 }
 
 /// 1024-point canvas, following the macOS icon grid (824pt tile, 100pt margin).
 func drawAppIcon() {
     let tile = NSBezierPath(roundedRect: NSRect(x: 100, y: 100, width: 824, height: 824), xRadius: 185, yRadius: 185)
-    NSGradient(starting: NSColor(red: 0.05, green: 0.56, blue: 0.40, alpha: 1),
-               ending: NSColor(red: 0, green: 0.38, blue: 0.27, alpha: 1))!.draw(in: tile, angle: -90)
+    let ember = NSColor(red: 0.62, green: 0.07, blue: 0.04, alpha: 1)
+    let flame = NSColor(red: 0.86, green: 0.25, blue: 0.06, alpha: 1)
+    let gold = NSColor(red: 0.93, green: 0.62, blue: 0.10, alpha: 1)
+    NSGradient(colors: [ember, flame, gold], atLocations: [0, 0.5, 1], colorSpace: .deviceRGB)!
+        .draw(in: tile, angle: 90)
 
-    let box = NSBezierPath(roundedRect: NSRect(x: 262, y: 262, width: 500, height: 500), xRadius: 100, yRadius: 100)
-    box.lineWidth = 40
-    NSColor.white.setStroke()
-    box.stroke()
-    drawGlyph(inkHeight: 330, centre: CGPoint(x: 512, y: 512), color: .white)
+    let badge = NSRect(x: 212, y: 302, width: 600, height: 420)
+    NSColor.white.setFill()
+    NSBezierPath(roundedRect: badge, xRadius: 96, yRadius: 96).fill()
+    drawGlyph(inkHeight: 320, centre: CGPoint(x: badge.midX, y: badge.midY), color: ember)
 }
 
 var args = CommandLine.arguments.dropFirst()
@@ -67,7 +75,9 @@ if args.first == "--app" {
     for points in [16, 32, 128, 256, 512] {
         for scale in [1, 2] {
             let name = "icon_\(points)x\(points)\(scale == 2 ? "@2x" : "").png"
-            let png = rep(pixels: points * scale, points: 1024, draw: drawAppIcon).representation(using: .png, properties: [:])!
+            let px = CGFloat(points * scale)
+            let png = rep(pixels: NSSize(width: px, height: px), points: NSSize(width: 1024, height: 1024), draw: drawAppIcon)
+                .representation(using: .png, properties: [:])!
             try! png.write(to: iconset.appendingPathComponent(name))
         }
     }
@@ -80,7 +90,10 @@ if args.first == "--app" {
     print("wrote \(out)")
 } else {
     let out = args.first ?? "icon.tiff"
-    let reps = [16, 32].map { rep(pixels: $0, points: 16, draw: drawMenuIcon) }
+    let reps = [1, 2].map { scale in
+        rep(pixels: NSSize(width: menuSize.width * CGFloat(scale), height: menuSize.height * CGFloat(scale)),
+            points: menuSize, draw: drawMenuIcon)
+    }
     let data = NSBitmapImageRep.tiffRepresentationOfImageReps(in: reps, using: .lzw, factor: 0)!
     try! data.write(to: URL(fileURLWithPath: out))
     print("wrote \(out)")

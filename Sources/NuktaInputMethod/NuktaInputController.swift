@@ -28,7 +28,9 @@ final class NuktaInputController: IMKInputController {
 
     override func menu() -> NSMenu! {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "নুকতা বাংলা সম্পর্কে…", action: #selector(showAbout(_:)), keyEquivalent: ""))
+        let about = NSMenuItem(title: "নুকতা বাংলা সম্পর্কে…", action: #selector(showAbout(_:)), keyEquivalent: "")
+        about.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
+        menu.addItem(about)
         return menu
     }
 

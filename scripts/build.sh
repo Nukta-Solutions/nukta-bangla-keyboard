@@ -1,10 +1,12 @@
 #!/bin/bash
-# Builds build/NuktaBangla.app (ad-hoc signed).
+# Builds build/NuktaBangla.app for this Mac, or with --universal for Apple Silicon and Intel.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release --product NuktaBangla
-BIN="$(swift build -c release --show-bin-path)/NuktaBangla"
+ARCHS=()
+[ "${1:-}" = "--universal" ] && ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --product NuktaBangla
+BIN="$(swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)/NuktaBangla"
 
 [ -f Resources/icon.tiff ] || swift scripts/make_icon.swift Resources/icon.tiff
 [ -f Resources/AppIcon.icns ] || swift scripts/make_icon.swift --app Resources/AppIcon.icns

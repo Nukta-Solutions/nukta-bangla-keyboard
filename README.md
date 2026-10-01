@@ -1,14 +1,24 @@
-# নুকতা বাংলা (Nukta Bangla) for macOS
+# নুকতা বাংলা (Nukta Bangla)
 
-The classic Bijoy keyboard layout as a native macOS input method, with Unicode output.
+The classic Bijoy keyboard layout as a native input method, with Unicode output: an InputMethodKit
+input method on macOS, an IBus engine on Linux. Same keys, same rules, same output on both.
 
-## Install
+## Install on macOS
 ```
 scripts/install.sh
 ```
 Then go to System Settings → Keyboard → Input Sources → Edit… → + → Bangla → **নুকতা বাংলা**.
 Run `scripts/install.sh` again after any code change. It also removes the old BijoyBangla.app; remove the old
 Bijoy Bangla entry from Input Sources if it's still listed.
+
+## Install on Linux
+```
+linux/install.sh
+```
+Then add it under Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা** (GNOME) or with
+`ibus-setup` elsewhere, and switch with Super+Space. It needs IBus and `python3-gi`;
+[linux/README.md](linux/README.md) has the per-distro packages, the non-GNOME desktop setup, the
+no-root install and how the Linux port works.
 
 ## Typing (Avro 4.5.1 style: the default)
 Classic Bijoy order works as always. As in Avro, a pre-base kar (ি ে ৈ) **pressed twice** right after a
@@ -50,6 +60,9 @@ swift test          # engine tests (keystrokes → exact Unicode)
 scripts/build.sh    # build/NuktaBangla.app
 ```
 - `Sources/NuktaEngine`: key map and reordering logic (no AppKit).
+- `linux/`: the Linux port — the same engine in Python plus the IBus front end
+  (`python3 -m unittest discover -s linux/tests`). The keystroke corpus in `linux/tests/test_engine.py`
+  mirrors `Tests/NuktaEngineTests/EngineTests.swift`: a new typing rule needs its case in both.
 - `Sources/NuktaInputMethod`: the InputMethodKit layer.
   - `ClientWriter` puts text straight into the app and rewrites the last few characters to reorder them.
   - Where an app can't rewrite text (terminals, Google Docs, Facebook, VS Code's chat box), it shows the

@@ -15,9 +15,9 @@ Bijoy Bangla entry from Input Sources if it's still listed.
 ```
 linux/install.sh
 ```
-or, once this repository is public, without cloning it at all:
+or, without cloning it at all:
 ```
-curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboard/master/linux/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboard/main/linux/bootstrap.sh | bash
 ```
 Then add it under Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা** (GNOME) or with
 `ibus-setup` elsewhere, and switch with Super+Space. It needs IBus and `python3-gi`;

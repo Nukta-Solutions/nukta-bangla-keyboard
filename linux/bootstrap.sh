@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # নুকতা বাংলা (Nukta Bangla) — one-line installer for Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboard/master/linux/bootstrap.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboard/main/linux/bootstrap.sh | bash
 #
 # Downloads the current source, checks it, and runs linux/install.sh. Arguments reach install.sh:
 #   … | bash -s -- --user        install into ~/.local, without root
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO="${NUKTA_REPO:-Nukta-Solutions/nukta-bangla-keyboard}"
-REF="${NUKTA_REF:-master}"
+REF="${NUKTA_REF:-main}"
 case "$REF" in
     v[0-9]*) REF_PATH="refs/tags/$REF" ;;
     *)       REF_PATH="refs/heads/$REF" ;;

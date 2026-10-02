@@ -85,7 +85,10 @@ curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboa
 
 It downloads the current source, checks the archive really is this project, hands the terminal back
 to `install.sh` so it can still ask about missing packages (a piped script has no stdin of its own),
-and installs. Arguments pass through — `| bash -s -- --user` or `| bash -s -- --with-deps` — and
+and installs. Every GitHub tarball URL redirects to `codeload.github.com`, which some networks block
+or stall on, so each attempt is time-limited (`NUKTA_CONNECT_TIMEOUT`, 15s by default) and it falls
+back to IPv4, then to `git clone` from github.com, and finally tells you to use the self-extracting
+installer from Releases. Arguments pass through — `| bash -s -- --user` or `| bash -s -- --with-deps` — and
 `NUKTA_REPO`, `NUKTA_REF` and `NUKTA_URL` point it at a fork, a tag or any other tarball.
 
 It needs no git and no clone. For a machine with no network, or to install from a fork that is not

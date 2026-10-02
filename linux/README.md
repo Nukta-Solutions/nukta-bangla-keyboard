@@ -75,9 +75,21 @@ git clone --depth 1 https://github.com/Nukta-Solutions/nukta-bangla-keyboard.git
 git -C ~/nukta-bangla-keyboard pull && ~/nukta-bangla-keyboard/linux/install.sh
 ```
 
-A `curl … | bash` one-liner is not possible while the repository is private — `raw.githubusercontent.com`
-returns 404 without a token. It would need the repository (or just a copy of a bootstrap script) to be
-public.
+### curl one-liner
+
+Once the repository is public, `bootstrap.sh` is the whole install:
+
+```
+curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboard/master/linux/bootstrap.sh | bash
+```
+
+It downloads the current source, checks the archive really is this project, hands the terminal back
+to `install.sh` so it can still ask about missing packages (a piped script has no stdin of its own),
+and installs. Arguments pass through — `| bash -s -- --user` or `| bash -s -- --with-deps` — and
+`NUKTA_REPO`, `NUKTA_REF` and `NUKTA_URL` point it at a fork, a tag or any other tarball.
+
+While the repository is private this returns 404: `raw.githubusercontent.com` needs a token, and so
+does the tarball. Private-repo users want the self-extracting installer above instead.
 
 ## How it works
 

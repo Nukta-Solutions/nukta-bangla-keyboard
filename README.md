@@ -80,3 +80,8 @@ scripts/build.sh    # build/NuktaBangla.app
 - `scripts/build.sh` signs with your Apple Development certificate if you have one.
 - Diagnostics: `/usr/bin/log show --last 1h --predicate 'subsystem == "com.asifmahmud.inputmethod.NuktaBangla"'`
   (use the full path; in zsh, plain `log` is a built-in command).
+
+## Licence
+[MIT](LICENSE) — © 2026 Nukta Solutions. Use it, change it, ship it, including in commercial work;
+just keep the copyright and permission notice. The licence covers this keyboard's own code: the
+Bijoy layout itself is a long-standing convention, not something this project claims.

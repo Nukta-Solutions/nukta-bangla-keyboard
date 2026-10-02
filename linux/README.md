@@ -137,3 +137,7 @@ goes to the journal).
   front end; the engine code would be reusable as-is.
 - No input-method menu (the macOS **নু** menu with its About panel); there is nothing to configure
   yet, since the Avro-style kar behaviour is always on.
+
+## Licence
+[MIT](../LICENSE), the same as the rest of the project — © 2026 Nukta Solutions. `nukta-bangla.xml`
+and the engine's own metadata report `MIT` to IBus, which is what distro packagers read.

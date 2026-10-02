@@ -20,6 +20,7 @@ python3 -m unittest discover -s tests -q
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 cp -R nukta_bangla icons tests install.sh uninstall.sh nukta-bangla.xml.in README.md "$STAGE/"
+cp ../LICENSE "$STAGE/"      # MIT: the notice travels with every copy
 rm -rf "$STAGE/nukta_bangla/__pycache__" "$STAGE/tests/__pycache__"
 chmod +x "$STAGE/install.sh" "$STAGE/uninstall.sh"
 cp ibus-engine-nukta-bangla "$STAGE/"

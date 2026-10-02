@@ -104,6 +104,10 @@ echo "Installing to $LIBDIR…"
 "${SUDO[@]}" install -m 644 nukta_bangla/*.py "$LIBDIR/nukta_bangla/"
 "${SUDO[@]}" install -m 644 icons/nukta-bangla.svg "$LIBDIR/icons/"
 "${SUDO[@]}" install -m 755 ibus-engine-nukta-bangla "$LIBDIR/"
+# MIT: ship the notice with the installed copy. ../LICENSE in a clone, ./LICENSE in a package.
+for license in ../LICENSE LICENSE; do
+    [[ -f $license ]] && { "${SUDO[@]}" install -m 644 "$license" "$LIBDIR/LICENSE"; break; }
+done
 # Stale .pyc from an older install would shadow the new sources.
 "${SUDO[@]}" rm -rf "$LIBDIR/nukta_bangla/__pycache__"
 

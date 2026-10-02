@@ -164,12 +164,12 @@ def run(standalone=False):
     if standalone:
         component = IBus.Component.new(
             "org.freedesktop.IBus.NuktaBangla", "নুকতা বাংলা (Nukta Bangla)", _version(),
-            "© 2026 Nukta Solutions", "Nukta Solutions",
+            "MIT", "Nukta Solutions",
             "https://github.com/Nukta-Solutions/nukta-bangla-keyboard", "", "nukta-bangla")
         component.add_engine(IBus.EngineDesc.new(
             "nukta-bangla", "নুকতা বাংলা (Nukta Bangla)",
             "Bijoy Bangla keyboard layout, Unicode output", "bn",
-            "© 2026 Nukta Solutions", "Nukta Solutions", "", "us"))
+            "MIT", "Nukta Solutions", "", "us"))
         bus.register_component(component)
         bus.set_global_engine_async("nukta-bangla", -1, None, None, None)
     else:

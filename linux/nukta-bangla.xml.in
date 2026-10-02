@@ -6,7 +6,7 @@
   <exec>@EXEC@ --ibus</exec>
   <version>@VERSION@</version>
   <author>Nukta Solutions</author>
-  <license>© 2026 Nukta Solutions</license>
+  <license>MIT</license>
   <homepage>https://github.com/Nukta-Solutions/nukta-bangla-keyboard</homepage>
   <textdomain>nukta-bangla</textdomain>
   <engines>
@@ -15,7 +15,7 @@
       <longname>নুকতা বাংলা (Nukta Bangla)</longname>
       <description>Bijoy Bangla keyboard layout, Unicode output</description>
       <language>bn</language>
-      <license>© 2026 Nukta Solutions</license>
+      <license>MIT</license>
       <author>Nukta Solutions</author>
       <icon>@ICON@</icon>
       <layout>us</layout>

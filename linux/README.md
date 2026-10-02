@@ -41,6 +41,44 @@ Without root, `linux/install.sh --user` installs into `~/.local`. IBus only scan
 so that mode also needs `IBUS_COMPONENT_PATH=$HOME/.local/share/ibus/component` in
 `~/.config/environment.d/nukta-bangla.conf` and a fresh login; the script prints the line.
 
+## One-line install, and sharing it
+
+```
+linux/package.sh
+```
+builds two files in `build/`, neither of which needs git, this repository or a network:
+
+| File | For |
+|---|---|
+| `nukta-bangla-<version>-linux.sh` | hand to someone — a single self-extracting installer |
+| `nukta-bangla-<version>-linux.tar.gz` | the same tree, if they prefer a tarball |
+
+Send the `.sh`. On the other machine the whole install is one line:
+
+```
+bash nukta-bangla-1.0.0-linux.sh
+```
+
+It unpacks itself to a temporary directory, offers to install IBus, the Python bindings and a Bangla
+font with that distro's package manager (apt, dnf, pacman or zypper — it only names what is actually
+missing), runs the engine tests, installs, and restarts IBus. `--with-deps` installs those packages
+without asking, for a scripted setup; `--user` installs into `~/.local` without root. Adding
+নুকতা বাংলা in the keyboard settings is still a one-time manual step — IBus engines cannot add
+themselves to someone's input-source list.
+
+To see what a machine is missing without installing anything: `linux/install.sh --print-deps`.
+
+From a clone, one line installs or updates in place:
+
+```
+git clone --depth 1 https://github.com/Nukta-Solutions/nukta-bangla-keyboard.git ~/nukta-bangla-keyboard && ~/nukta-bangla-keyboard/linux/install.sh
+git -C ~/nukta-bangla-keyboard pull && ~/nukta-bangla-keyboard/linux/install.sh
+```
+
+A `curl … | bash` one-liner is not possible while the repository is private — `raw.githubusercontent.com`
+returns 404 without a token. It would need the repository (or just a copy of a bootstrap script) to be
+public.
+
 ## How it works
 
 `nukta_bangla/` is a port of `Sources/NuktaEngine`, file for file: `keymap.py` (which key means

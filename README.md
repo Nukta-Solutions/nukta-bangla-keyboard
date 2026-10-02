@@ -47,9 +47,13 @@ Backspace undoes the last key of the syllable you're still typing.
 
 ## Sharing with friends
 ```
-scripts/package.sh   # build/NuktaBangla-<version>.pkg + build/INSTALL.txt
+scripts/package.sh         # macOS: build/NuktaBangla-<version>.pkg + build/INSTALL.txt
+linux/package.sh           # Linux: build/nukta-bangla-<version>-linux.sh (one self-extracting file)
 ```
-Send both files. The package runs on Apple Silicon and Intel Macs (macOS 13+) and installs into
+On Linux the whole install is then `bash nukta-bangla-<version>-linux.sh` — it carries the engine,
+offers to install IBus and a Bangla font, and needs neither git nor this repository.
+
+Send both macOS files. The .pkg runs on Apple Silicon and Intel Macs (macOS 13+) and installs into
 `/Library/Input Methods`. It isn't notarized, so the first open needs System Settings → Privacy & Security →
 Open Anyway; [INSTALL.txt](INSTALL.txt) walks through it in Bangla. Bump `CFBundleShortVersionString` in
 Info.plist before sharing a new version.

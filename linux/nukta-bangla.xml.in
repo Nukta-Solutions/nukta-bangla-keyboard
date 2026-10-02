@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Installed as @COMPONENTDIR@/nukta-bangla.xml by install.sh, which fills in the paths. -->
+<component>
+  <name>org.freedesktop.IBus.NuktaBangla</name>
+  <description>নুকতা বাংলা (Nukta Bangla) — Bijoy Bangla keyboard layout</description>
+  <exec>@EXEC@ --ibus</exec>
+  <version>@VERSION@</version>
+  <author>Nukta Solutions</author>
+  <license>MIT</license>
+  <homepage>https://github.com/Nukta-Solutions/nukta-bangla-keyboard</homepage>
+  <textdomain>nukta-bangla</textdomain>
+  <engines>
+    <engine>
+      <name>nukta-bangla</name>
+      <longname>নুকতা বাংলা (Nukta Bangla)</longname>
+      <description>Bijoy Bangla keyboard layout, Unicode output</description>
+      <language>bn</language>
+      <license>MIT</license>
+      <author>Nukta Solutions</author>
+      <icon>@ICON@</icon>
+      <layout>us</layout>
+      <symbol>নু</symbol>
+      <rank>99</rank>
+    </engine>
+  </engines>
+</component>

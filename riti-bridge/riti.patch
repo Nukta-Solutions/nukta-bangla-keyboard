@@ -1,0 +1,137 @@
+diff --git a/include/riti.h b/include/riti.h
+index 9ef0109..f6e9105 100644
+--- a/include/riti.h
++++ b/include/riti.h
+@@ -441,6 +441,11 @@ void riti_config_set_ansi_encoding(struct Config *ptr, bool option);
+ 
+ void riti_config_set_smart_quote(struct Config *ptr, bool option);
+ 
++/**
++ * Nukta Bangla patch: turns AutoCorrect (built-in and user entries) on or off. On by default.
++ */
++void riti_config_set_autocorrect(struct Config *ptr, bool option);
++
+ #ifdef __cplusplus
+ }  // extern "C"
+ #endif  // __cplusplus
+diff --git a/src/config.rs b/src/config.rs
+index 5396b57..3e6f393 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -24,6 +24,8 @@ pub struct Config {
+     // Output in ANSI encoding
+     ansi: bool,
+     smart_quote: bool,
++    // Replace known misspellings with their correction (built-in and user AutoCorrect entries).
++    autocorrect: bool,
+ }
+ 
+ impl Config {
+@@ -212,6 +214,14 @@ impl Config {
+ 
+     /// Get the config's smart quote configuration.
+     #[must_use]
++    pub fn get_autocorrect(&self) -> bool {
++        self.autocorrect
++    }
++
++    pub fn set_autocorrect(&mut self, autocorrect: bool) {
++        self.autocorrect = autocorrect;
++    }
++
+     pub fn get_smart_quote(&self) -> bool {
+         self.smart_quote
+     }
+@@ -280,6 +290,7 @@ impl Default for Config {
+             phonetic_suggestion: false,
+             ansi: false,
+             smart_quote: true,
++            autocorrect: true,
+         }
+     }
+ }
+diff --git a/src/ffi.rs b/src/ffi.rs
+index fa6c4a5..ca0f967 100644
+--- a/src/ffi.rs
++++ b/src/ffi.rs
+@@ -429,3 +429,13 @@ pub extern "C" fn riti_config_set_smart_quote(ptr: *mut Config, option: bool) {
+ 
+     config.set_smart_quote(option);
+ }
++
++#[no_mangle]
++pub extern "C" fn riti_config_set_autocorrect(ptr: *mut Config, option: bool) {
++    let config = unsafe {
++        assert!(!ptr.is_null());
++        &mut *ptr
++    };
++
++    config.set_autocorrect(option);
++}
+diff --git a/src/phonetic/method.rs b/src/phonetic/method.rs
+index 3fe74ed..12916fa 100644
+--- a/src/phonetic/method.rs
++++ b/src/phonetic/method.rs
+@@ -50,7 +50,7 @@ impl PhoneticMethod {
+ 
+         PhoneticMethod {
+             buffer: String::with_capacity(20),
+-            suggestion: PhoneticSuggestion::new(autocorrect),
++            suggestion: PhoneticSuggestion::new(autocorrect, config.get_autocorrect()),
+             selections,
+             modified,
+             prev_selection: 0,
+@@ -182,7 +182,7 @@ impl Default for PhoneticMethod {
+     fn default() -> Self {
+         PhoneticMethod {
+             buffer: String::new(),
+-            suggestion: PhoneticSuggestion::new(HashMap::with_hasher(RandomState::new())),
++            suggestion: PhoneticSuggestion::new(HashMap::with_hasher(RandomState::new()), true),
+             selections: HashMap::with_hasher(RandomState::new()),
+             modified: SystemTime::UNIX_EPOCH,
+             prev_selection: 0,
+diff --git a/src/phonetic/suggestion.rs b/src/phonetic/suggestion.rs
+index 71286df..58fa86f 100644
+--- a/src/phonetic/suggestion.rs
++++ b/src/phonetic/suggestion.rs
+@@ -21,10 +21,12 @@ pub(crate) struct PhoneticSuggestion {
+     dict: Suggest,
+     // The user's auto-correct entries.
+     pub(crate) user_autocorrect: HashMap<String, String, RandomState>,
++    // AutoCorrect is switched on.
++    autocorrect: bool,
+ }
+ 
+ impl PhoneticSuggestion {
+-    pub(crate) fn new(user_autocorrect: HashMap<String, String, RandomState>) -> Self {
++    pub(crate) fn new(user_autocorrect: HashMap<String, String, RandomState>, autocorrect: bool) -> Self {
+         PhoneticSuggestion {
+             suggestions: Vec::with_capacity(10),
+             pbuffer: String::with_capacity(60),
+@@ -32,6 +34,7 @@ impl PhoneticSuggestion {
+             phonetic: Parser::new_phonetic(),
+             dict: Suggest::new(),
+             user_autocorrect,
++            autocorrect,
+         }
+     }
+ 
+@@ -318,6 +321,9 @@ impl PhoneticSuggestion {
+     ///
+     /// This looks in the user defined AutoCorrect entries first.
+     fn search_corrected<'a>(&'a self, term: &str, data: &'a Data) -> Option<&'a str> {
++        if !self.autocorrect {
++            return None;
++        }
+         self.user_autocorrect
+             .get(term)
+             .map(String::as_str)
+@@ -328,7 +334,7 @@ impl PhoneticSuggestion {
+ // Implement Default trait on PhoneticSuggestion, actually for testing convenience.
+ impl Default for PhoneticSuggestion {
+     fn default() -> Self {
+-        PhoneticSuggestion::new(HashMap::with_hasher(RandomState::new()))
++        PhoneticSuggestion::new(HashMap::with_hasher(RandomState::new()), true)
+     }
+ }
+ 

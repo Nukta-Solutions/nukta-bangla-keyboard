@@ -1,0 +1,5 @@
+module CRiti [system] {
+    header "shim.h"
+    link "nukta_riti"
+    export *
+}

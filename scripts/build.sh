@@ -8,7 +8,7 @@ ARCHS=()
 swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --product NuktaBangla
 BIN="$(swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)/NuktaBangla"
 
-[ -f Resources/icon.tiff ] || swift scripts/make_icon.swift Resources/icon.tiff
+[ Resources/icon.tiff -nt Resources/icon.svg ] || swift scripts/make_icon.swift Resources/icon.tiff
 [ -f Resources/AppIcon.icns ] || swift scripts/make_icon.swift --app Resources/AppIcon.icns
 
 APP=build/NuktaBangla.app

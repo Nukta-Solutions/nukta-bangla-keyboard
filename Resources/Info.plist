@@ -4,36 +4,38 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>নুকতা বাংলা</string>
 	<key>CFBundleExecutable</key>
 	<string>NuktaBangla</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.asifmahmud.inputmethod.NuktaBangla</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>নুকতা বাংলা</string>
-	<key>CFBundleDisplayName</key>
-	<string>নুকতা বাংলা</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Nukta Solutions. MIT licensed.</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
-	<key>LSBackgroundOnly</key>
-	<true/>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
 	<key>InputMethodConnectionName</key>
 	<string>com.asifmahmud.inputmethod.NuktaBangla_Connection</string>
 	<key>InputMethodServerControllerClass</key>
 	<string>NuktaInputController</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Nukta Solutions. MIT licensed.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>TISIconIsTemplate</key>
+	<true/>
 	<key>TISIntendedLanguage</key>
 	<string>bn</string>
 	<key>tsInputMethodCharacterRepertoireKey</key>
@@ -42,7 +44,5 @@
 	</array>
 	<key>tsInputMethodIconFileKey</key>
 	<string>icon.tiff</string>
-	<key>TISIconIsTemplate</key>
-	<true/>
 </dict>
 </plist>

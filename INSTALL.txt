@@ -20,5 +20,15 @@ ABC আর নুকতা বাংলার মধ্যে বদলাতে
 
 নতুন ভার্সন পেলে: শুধু নতুন .pkg ফাইলটি আবার চালান (১ থেকে ৩)।
 
+লেআউট বদলাতে: মেনু বারের নু আইকনে ক্লিক করে "বিজয় লেআউট" বা "ফোনেটিক" বেছে নিন।
+ফোনেটিকে ইংরেজি অক্ষরে লিখুন (ami bangla likhchi → আমি বাংলা লিখছি)। লেখার নিচে শব্দের
+তালিকা আসবে: স্পেস দিলে বাছাই করা শব্দ বসবে, ↑↓ দিয়ে বাছাই বদলান, ১–৯ চেপে সরাসরি বাছুন।
+অটোকারেক্ট, টাইপিং মোড, তালিকার অবস্থান: নু আইকন → সেটিংস…
+
 মুছে ফেলতে: Input Sources থেকে নুকতা বাংলা সরান, তারপর Finder-এ
 Go → Go to Folder… → /Library/Input Methods খুলে NuktaBangla.app Trash-এ ফেলুন।
+
+লাইসেন্স: ফোনেটিক টাইপিং OpenBangla-র riti ইঞ্জিন আর Lekho-র কোড দিয়ে তৈরি
+(Mozilla Public License 2.0)। সেই অংশের সোর্স কোড ও সব লাইসেন্স অ্যাপের ভেতরে আছে:
+/Library/Input Methods/NuktaBangla.app/Contents/Resources/Licenses
+মূল সোর্স: https://github.com/OpenBangla/riti · https://github.com/ARahim3/Lekho

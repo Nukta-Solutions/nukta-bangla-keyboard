@@ -1,24 +1,24 @@
 {
-    "configurations": [
-        {
-            "type": "swift",
-            "request": "launch",
-            "args": [],
-            "cwd": "${workspaceFolder:NuktaBangla}",
-            "name": "Debug NuktaBangla",
-            "target": "NuktaBangla",
-            "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug NuktaBangla"
-        },
-        {
-            "type": "swift",
-            "request": "launch",
-            "args": [],
-            "cwd": "${workspaceFolder:NuktaBangla}",
-            "name": "Release NuktaBangla",
-            "target": "NuktaBangla",
-            "configuration": "release",
-            "preLaunchTask": "swift: Build Release NuktaBangla"
-        }
-    ]
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:nukta-bangla}",
+      "name": "Debug NuktaBangla",
+      "target": "NuktaBangla",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug NuktaBangla"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:nukta-bangla}",
+      "name": "Release NuktaBangla",
+      "target": "NuktaBangla",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release NuktaBangla"
+    }
+  ]
 }

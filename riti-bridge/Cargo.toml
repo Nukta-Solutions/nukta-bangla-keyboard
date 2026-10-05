@@ -1,0 +1,19 @@
+[package]
+name = "nukta-riti"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+publish = false
+
+[lib]
+name = "nukta_riti"
+crate-type = ["staticlib"]
+
+[dependencies]
+# OpenBangla's phonetic engine, vendored at 9afef322d29807e7c93ff589e910b0794f3812ec (the revision
+# Lekho ships) with riti.patch applied: an AutoCorrect on/off switch.
+riti = { path = "riti" }
+
+[profile.release]
+codegen-units = 1
+lto = true

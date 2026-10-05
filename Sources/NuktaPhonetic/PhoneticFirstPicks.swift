@@ -11,7 +11,7 @@ import Foundation
 final class PhoneticFirstPicks {
     private var picks: [String: String] = [:]
     private let fileURL: URL
-    private let ioQueue = DispatchQueue(label: "com.asifmahmud.inputmethod.NuktaBangla.picks", qos: .utility)
+    private let ioQueue = DispatchQueue(label: "com.nuktasolutions.inputmethod.NuktaBangla.picks", qos: .utility)
 
     /// Characters riti treats as punctuation around a word, plus their Bangla forms.
     private static let affixCharacters = CharacterSet(charactersIn: "-]~!@#%&*()_=+[{}'\";<>/?|.,।“”‘’")

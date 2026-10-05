@@ -2,7 +2,9 @@ import Cocoa
 import InputMethodKit
 
 let connectionName = Bundle.main.infoDictionary?["InputMethodConnectionName"] as? String
-    ?? "com.asifmahmud.inputmethod.NuktaBangla_Connection"
+    ?? "com.nuktasolutions.inputmethod.NuktaBangla_Connection"
+
+Settings.migrateFromOldBundleID()
 
 // Kept alive for the lifetime of the process.
 let server = IMKServer(name: connectionName, bundleIdentifier: Bundle.main.bundleIdentifier)

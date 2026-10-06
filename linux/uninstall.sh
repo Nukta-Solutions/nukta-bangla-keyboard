@@ -13,6 +13,9 @@ SUDO=()
 "${SUDO[@]}" rm -f "$PREFIX/share/ibus/component/nukta-bangla.xml"
 
 if command -v ibus >/dev/null; then
+    # The engine process survives `ibus restart`, and would keep running from the files just
+    # deleted. Kill it before the daemon restarts, so nothing respawns it.
+    pkill -f "$PREFIX/share/ibus-nukta-bangla/ibus-engine-nukta-bangla" >/dev/null 2>&1 || true
     ibus write-cache >/dev/null 2>&1 || true
     ibus restart >/dev/null 2>&1 || true
 fi

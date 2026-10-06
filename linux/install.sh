@@ -121,6 +121,10 @@ sed -e "s|@EXEC@|$PREFIX/share/ibus-nukta-bangla/ibus-engine-nukta-bangla|" \
 "${SUDO[@]}" install -m 644 "$XML" "$COMPONENTDIR/nukta-bangla.xml"
 
 if [[ -z "${DESTDIR:-}" ]] && command -v ibus >/dev/null; then
+    # A running engine has the old Python already loaded, and `ibus restart` restarts the daemon
+    # without touching it: without this the session keeps typing with the code we just replaced.
+    # It belongs to this user's daemon, so no sudo — and IBus respawns it on the next keystroke.
+    pkill -f "$LIBDIR/ibus-engine-nukta-bangla" >/dev/null 2>&1 || true
     ibus write-cache >/dev/null 2>&1 || true
     ibus restart >/dev/null 2>&1 || true
 fi

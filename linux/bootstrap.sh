@@ -8,7 +8,7 @@
 #   … | bash -s -- --with-deps   install IBus and the Python bindings without asking first
 #
 # Overrides, for a fork or a tagged release:
-#   NUKTA_REPO=owner/name  NUKTA_REF=v1.0.0  NUKTA_URL=https://…/something.tar.gz
+#   NUKTA_REPO=owner/name  NUKTA_REF=v1.0.1  NUKTA_URL=https://…/something.tar.gz
 #   NUKTA_CONNECT_TIMEOUT=30            longer, for a slow link
 set -euo pipefail
 

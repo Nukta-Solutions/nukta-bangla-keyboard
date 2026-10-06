@@ -3,4 +3,4 @@
 from .engine import Engine, Output
 
 __all__ = ["Engine", "Output"]
-__version__ = "1.0.0"
+__version__ = "1.0.1"

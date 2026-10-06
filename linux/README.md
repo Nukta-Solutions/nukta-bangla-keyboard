@@ -56,7 +56,7 @@ builds two files in `build/`, neither of which needs git, this repository or a n
 Send the `.sh`. On the other machine the whole install is one line:
 
 ```
-bash nukta-bangla-1.0.0-linux.sh
+bash nukta-bangla-1.0.1-linux.sh
 ```
 
 It unpacks itself to a temporary directory, offers to install IBus, the Python bindings and a Bangla

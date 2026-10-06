@@ -113,9 +113,17 @@ On Linux the whole install is then `bash nukta-bangla-<version>-linux.sh` — it
 offers to install IBus and a Bangla font, and needs neither git nor this repository.
 
 Send both macOS files. The .pkg runs on Apple Silicon and Intel Macs (macOS 13+) and installs into
-`/Library/Input Methods`. It isn't notarized, so the first open needs System Settings → Privacy & Security →
-Open Anyway; [INSTALL.txt](INSTALL.txt) walks through it in Bangla. Bump `CFBundleShortVersionString` in
-Info.plist before sharing a new version.
+`/Library/Input Methods`; [INSTALL.txt](INSTALL.txt) walks through it in Bangla. Bump
+`CFBundleShortVersionString` (and `CFBundleVersion`) in Info.plist before sharing a new version.
+
+`package.sh` signs the app and the .pkg with Nukta Solutions' Developer ID certificates, notarizes the .pkg
+and staples the ticket, so it installs with no Gatekeeper warning. It needs, in your keychain:
+- the **Developer ID Application** and **Developer ID Installer** certificates
+  (Xcode → Settings → Accounts → Manage Certificates);
+- a notarytool profile named `nukta`, created once with an app-specific password from account.apple.com:
+  `xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id Y2466L4CFL`.
+
+`scripts/package.sh --no-notarize` makes a signed but un-notarized .pkg for a quick test.
 
 ## Development
 Needs Rust for riti: `curl https://sh.rustup.rs -sSf | sh` (once).
@@ -139,8 +147,9 @@ scripts/build.sh        # build/NuktaBangla.app (builds riti too)
     syllable in progress as underlined (marked) text and inserts it once it's finished.
 - `scripts/make_icon.swift` draws the নু icons: `Resources/icon.tiff` (menu bar) and, with `--app`,
   `Resources/AppIcon.icns` (Finder). Delete one and rebuild to redraw it.
-- `scripts/build.sh` signs with your Apple Development certificate if you have one.
-- Diagnostics: `/usr/bin/log show --last 1h --predicate 'subsystem == "com.asifmahmud.inputmethod.NuktaBangla"'`
+- `scripts/build.sh` signs with your Apple Development (or Developer ID) certificate if you have one;
+  `--release` (used by `package.sh`) signs with Developer ID and the hardened runtime for distribution.
+- Diagnostics: `/usr/bin/log show --last 1h --predicate 'subsystem == "com.nuktasolutions.inputmethod.NuktaBangla"'`
   (use the full path; in zsh, plain `log` is a built-in command).
 
 ## Licence

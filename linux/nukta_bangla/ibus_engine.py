@@ -29,6 +29,22 @@ US_LAYOUT = {
     43: ("\\", "|"),
 }
 
+# A modifier pressed on its own. IBus sends these as key events too, and they must change
+# nothing: Shift on its way to a capital letter (V for ল, B for ণ) used to finish the syllable
+# and push a pending kar out before its consonant — প্রাণে came out as প্রােণ.
+MODIFIER_KEYVALS = frozenset((
+    0xFFE1, 0xFFE2,          # Shift_L, Shift_R
+    0xFFE3, 0xFFE4,          # Control_L, Control_R
+    0xFFE5, 0xFFE6,          # Caps_Lock, Shift_Lock
+    0xFFE7, 0xFFE8,          # Meta_L, Meta_R
+    0xFFE9, 0xFFEA,          # Alt_L, Alt_R
+    0xFFEB, 0xFFEC,          # Super_L, Super_R
+    0xFFED, 0xFFEE,          # Hyper_L, Hyper_R
+    0xFF7E, 0xFF7F,          # Mode_switch, Num_Lock
+    0xFF14,                  # Scroll_Lock
+    0xFE03,                  # ISO_Level3_Shift (AltGr)
+))
+
 # Modifiers that mean the keystroke is a shortcut (⌃C, Alt-Tab, Super…), not typing.
 SHORTCUT_MASK = (IBus.ModifierType.CONTROL_MASK
                  | IBus.ModifierType.MOD1_MASK      # Alt
@@ -51,6 +67,9 @@ class NuktaBanglaEngine(IBus.Engine):
     def do_process_key_event(self, keyval, keycode, state):
         if state & IBus.ModifierType.RELEASE_MASK:
             return False
+
+        if keyval in MODIFIER_KEYVALS:
+            return False       # a modifier alone: leave the syllable exactly as it is
 
         if state & SHORTCUT_MASK:
             self._flush()

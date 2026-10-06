@@ -1,12 +1,21 @@
 #!/bin/bash
 # Builds build/NuktaBangla.app for this Mac, or with --universal for Apple Silicon and Intel.
+# --release signs it for distribution: Developer ID, hardened runtime and a secure timestamp.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+ARCHS=()
+RELEASE=
+for arg in "$@"; do
+    case "$arg" in
+        --universal) ARCHS=(--arch arm64 --arch x86_64) ;;
+        --release) RELEASE=1 ;;
+        *) echo "Unknown option: $arg" >&2; exit 1 ;;
+    esac
+done
+
 scripts/build_riti.sh
 
-ARCHS=()
-[ "${1:-}" = "--universal" ] && ARCHS=(--arch arm64 --arch x86_64)
 swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --product NuktaBangla
 BIN="$(swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)/NuktaBangla"
 
@@ -31,9 +40,17 @@ zip -qr -X "$LICENSES/MPL-source.zip" \
     Sources/NuktaInputMethod/CandidatePanel.swift Sources/NuktaInputMethod/CursorRect.swift \
     -x '*.DS_Store'
 
-# A real certificate keeps the Accessibility permission across rebuilds (ad-hoc signing
-# changes identity every build, so macOS would ask again).
-SIGN_ID="${SIGN_ID:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
-codesign --force --sign "${SIGN_ID:--}" "$APP"
+if [ -n "$RELEASE" ]; then
+    # Gatekeeper and notarization need a Developer ID signature with the hardened runtime.
+    SIGN_ID="${SIGN_ID:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/ {print $2; exit}')}"
+    [ -n "$SIGN_ID" ] || { echo "No Developer ID Application certificate in the keychain" >&2; exit 1; }
+    codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP"
+    codesign --verify --strict --verbose=2 "$APP"
+else
+    # A real certificate keeps the same signing identity across rebuilds (ad-hoc signing
+    # changes it every build).
+    SIGN_ID="${SIGN_ID:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
+    codesign --force --sign "${SIGN_ID:--}" "$APP"
+fi
 echo "Signed with: ${SIGN_ID:-ad-hoc}"
 echo "Built $APP"

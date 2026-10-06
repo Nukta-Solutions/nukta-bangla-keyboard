@@ -76,6 +76,15 @@ enum Settings {
             .appendingPathComponent("Nukta Bangla")
     }
 
+    /// Brings over, once, the settings saved under the old com.asifmahmud bundle ID.
+    static func migrateFromOldBundleID() {
+        let old = "com.asifmahmud.inputmethod.NuktaBangla"
+        guard let current = Bundle.main.bundleIdentifier, current != old,
+              defaults.persistentDomain(forName: current) == nil,
+              let saved = defaults.persistentDomain(forName: old) else { return }
+        defaults.setPersistentDomain(saved, forName: current)
+    }
+
     private static func value<T: RawRepresentable>(_ key: String, default fallback: T) -> T where T.RawValue == String {
         defaults.string(forKey: key).flatMap(T.init(rawValue:)) ?? fallback
     }

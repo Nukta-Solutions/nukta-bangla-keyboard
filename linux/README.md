@@ -56,7 +56,7 @@ builds two files in `build/`, neither of which needs git, this repository or a n
 Send the `.sh`. On the other machine the whole install is one line:
 
 ```
-bash nukta-bangla-1.0.0-linux.sh
+bash nukta-bangla-1.0.1-linux.sh
 ```
 
 It unpacks itself to a temporary directory, offers to install IBus, the Python bindings and a Bangla
@@ -125,6 +125,11 @@ python3 -m unittest discover -s linux/tests      # engine + key-event tests, no 
 ```
 `tests/test_engine.py` is the shared corpus; `tests/test_ibus_layer.py` drives the IBus front end
 against the stubs in `tests/fake_ibus.py` (preedit, commits, backspace, shortcut pass-through).
+
+After editing the engine's Python, reinstall with `./install.sh` rather than copying files over
+`/usr/share/ibus-nukta-bangla`: the running process already has the old module in memory, and
+`ibus restart` leaves that process alone. `install.sh` kills it so IBus respawns it; by hand it is
+`pkill -f ibus-engine-nukta-bangla`.
 
 To try a change without installing, run the engine against the live bus:
 ```

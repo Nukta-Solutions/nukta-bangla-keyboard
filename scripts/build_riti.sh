@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../riti-bridge"
 
-command -v cargo >/dev/null || source "$HOME/.cargo/env" 2>/dev/null || true
+command -v cargo >/dev/null || [ ! -f "$HOME/.cargo/env" ] || source "$HOME/.cargo/env"
 command -v cargo >/dev/null || { echo "Rust is missing: install it from https://rustup.rs" >&2; exit 1; }
 
 # Match the app's minimum macOS, or the linker warns about every object file.

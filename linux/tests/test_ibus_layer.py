@@ -21,11 +21,22 @@ KEYCODE = {char: code for code, pair in US_LAYOUT.items() for char in pair}
 SHIFTED = {pair[1] for pair in US_LAYOUT.values()}
 
 
+SHIFT_KEYVAL = 0xFFE1   # Shift_L
+SHIFT_KEYCODE = 42
+
+
 def press(engine, char):
-    """Types `char` as its physical key on a US keyboard."""
+    """Types `char` as its physical key on a US keyboard.
+
+    A capital goes through Shift, and IBus delivers that Shift press as a key event of its own,
+    so this sends it too — the engine has to ignore it.
+    """
     keycode = KEYCODE[char]
-    state = IBus.ModifierType.SHIFT_MASK if char in SHIFTED else 0
-    return engine.do_process_key_event(ord(char.lower()), keycode, state)
+    if char in SHIFTED:
+        engine.do_process_key_event(SHIFT_KEYVAL, SHIFT_KEYCODE, 0)
+        return engine.do_process_key_event(ord(char.lower()), keycode,
+                                           IBus.ModifierType.SHIFT_MASK)
+    return engine.do_process_key_event(ord(char.lower()), keycode, 0)
 
 
 class IBusLayerTests(unittest.TestCase):
@@ -96,6 +107,12 @@ class IBusLayerTests(unittest.TestCase):
         e = self.engine
         self.assertFalse(e.do_process_key_event(ord("+"), 78, 0))
 
+    def test_a_modifier_on_its_own_leaves_the_syllable_alone(self):
+        e = self.type_keys("dj")                   # কি, still being built
+        self.assertFalse(e.do_process_key_event(SHIFT_KEYVAL, SHIFT_KEYCODE, 0))
+        self.assertEqual(e.committed, "")          # Shift is not the end of the syllable
+        self.assertEqual(e.preedit, "কি")
+
 
 class PendingKarIsHeldBackTests(unittest.TestCase):
     """A kar with no consonant to sit on yet stays off screen, as it does on macOS.
@@ -137,6 +154,17 @@ class PendingKarIsHeldBackTests(unittest.TestCase):
             press(e, ch)
         e.do_focus_out()
         self.assertEqual(e.committed, "প্রেরণা")
+
+    def test_shift_does_not_push_a_pending_kar_out_before_its_consonant(self):
+        """ভালোবাসি and প্রাণে used to come out as ভােলাবাসি and প্রােণ: ল and ণ are typed with
+        Shift, and the Shift press finished the syllable while the kar was still waiting."""
+        for keys, word in (("HfcVfhfnd", "ভালোবাসি"), ("rzfcB", "প্রাণে"), ("jcV", "কলে")):
+            with self.subTest(word=word):
+                engine = NuktaBanglaEngine()
+                for ch in keys:
+                    press(engine, ch)
+                engine.do_focus_out()
+                self.assertEqual(engine.committed, word)
 
     def test_trailing_hasanta_is_held_back(self):
         e = self.type_keys("u")                    # জ

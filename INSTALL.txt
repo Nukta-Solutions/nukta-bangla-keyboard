@@ -2,23 +2,20 @@
 (macOS 13 Ventura বা নতুন; Apple Silicon ও Intel দুই ধরনের Mac-এই চলে)
 
 ১. NuktaBangla-x.x.x.pkg ফাইলটিতে ডাবল-ক্লিক করুন।
-   "can't be opened" / "Apple could not verify" লেখা এলে Done চাপুন।
 
-২. System Settings → Privacy & Security খুলুন, নিচে স্ক্রল করুন।
-   NuktaBangla-এর পাশে "Open Anyway" চাপুন, Mac-এর পাসওয়ার্ড দিন।
-   (এটা শুধু প্রথমবার লাগবে।)
+২. Installer-এ Continue → Install চাপুন, পাসওয়ার্ড দিন।
 
-৩. Installer-এ Continue → Install চাপুন, পাসওয়ার্ড দিন।
+৩. একবার Log Out করে আবার Log In করুন (Apple মেনু → Log Out)।
 
-৪. একবার Log Out করে আবার Log In করুন (Apple মেনু → Log Out)।
-
-৫. System Settings → Keyboard → Input Sources → Edit… → + চাপুন।
+৪. System Settings → Keyboard → Input Sources → Edit… → + চাপুন।
    বাঁ দিকে Bangla বেছে নিন → "নুকতা বাংলা" → Add।
 
 এখন মেনু বারের কিবোর্ড আইকন থেকে, বা Control + Space (অথবা fn/🌐) চেপে
 ABC আর নুকতা বাংলার মধ্যে বদলাতে পারবেন।
 
-নতুন ভার্সন পেলে: শুধু নতুন .pkg ফাইলটি আবার চালান (১ থেকে ৩)।
+নতুন ভার্সন পেলে: শুধু নতুন .pkg ফাইলটি আবার চালান (১ ও ২)।
+Developer ID সাইন ছাড়া পুরনো ভার্সন থেকে আপডেট করলে: Input Sources-এ পুরনো নুকতা বাংলা
+কাজ করবে না। সেটা − চেপে সরিয়ে দিন, তারপর ৪ নম্বর ধাপে নতুনটি যোগ করুন।
 
 লেআউট বদলাতে: মেনু বারের নু আইকনে ক্লিক করে "বিজয় লেআউট" বা "ফোনেটিক" বেছে নিন।
 ফোনেটিকে ইংরেজি অক্ষরে লিখুন (ami bangla likhchi → আমি বাংলা লিখছি)। লেখার নিচে শব্দের

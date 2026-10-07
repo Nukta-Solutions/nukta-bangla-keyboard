@@ -10,8 +10,8 @@ name = "nukta_riti"
 crate-type = ["staticlib"]
 
 [dependencies]
-# OpenBangla's phonetic engine, vendored at 9afef322d29807e7c93ff589e910b0794f3812ec (the revision
-# Lekho ships) with riti.patch applied: an AutoCorrect on/off switch.
+# OpenBangla's phonetic engine, vendored at 9afef322d29807e7c93ff589e910b0794f3812ec with riti.patch
+# applied: an AutoCorrect on/off switch.
 riti = { path = "riti" }
 
 [profile.release]

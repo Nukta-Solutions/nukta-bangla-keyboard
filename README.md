@@ -92,12 +92,12 @@ underlined in Bangla as you type, with a list of suggestions from a 150k-word di
 What it learns (picks, riti's selections) is kept in `~/Library/Application Support/Nukta Bangla`.
 
 ### Where it comes from, and the licence
-Phonetic typing is [riti](https://github.com/OpenBangla/riti), OpenBangla's engine (Rust), with key handling,
-the suggestion list and the pick memory adapted from [Lekho](https://github.com/ARahim3/Lekho). Both are under
-the Mozilla Public License 2.0, which applies file by file:
-- MPL files: everything in `riti-bridge/`, `Sources/CRiti`, `Sources/NuktaPhonetic`, and
-  `Sources/NuktaInputMethod/CandidatePanel.swift` and `CursorRect.swift`. Keep their headers, and keep them
-  MPL when you change them. The rest of the app isn't MPL.
+Phonetic typing uses [riti](https://github.com/OpenBangla/riti), OpenBangla's engine (Rust), as a library.
+riti is under the Mozilla Public License 2.0, which applies file by file:
+- MPL files: `riti-bridge/riti` (riti itself) and `riti-bridge/riti.patch`. Keep them MPL when you change
+  them. Everything else, including the riti wrapper, the suggestion list and the bridge in
+  `riti-bridge/src`, is this project's own MIT code; [docs/phonetic-spec.md](docs/phonetic-spec.md)
+  describes how it behaves.
 - `riti-bridge/riti` is riti at `9afef32` with [riti-bridge/riti.patch](riti-bridge/riti.patch) applied (the
   autocorrect switch). To update riti, copy a newer revision in and reapply the patch.
 - `scripts/build.sh` puts the MPL source (`MPL-source.zip`), `MPL-2.0.txt` and the Rust crates' licences
@@ -156,6 +156,6 @@ scripts/build.sh        # build/NuktaBangla.app (builds riti too)
 [MIT](LICENSE) — © 2026 Nukta Solutions — for this keyboard's own code, including the Linux port. Use
 it, change it, ship it, including in commercial work; just keep the copyright and permission notice.
 
-Phonetic typing is built on MPL-2.0 code, which stays MPL file by file: see
-[Where it comes from, and the licence](#where-it-comes-from-and-the-licence) for exactly which files.
+Phonetic typing uses riti, which is MPL-2.0 and stays MPL file by file: see
+[Where it comes from, and the licence](#where-it-comes-from-and-the-licence).
 The Bijoy layout itself is a long-standing convention, not something this project claims.

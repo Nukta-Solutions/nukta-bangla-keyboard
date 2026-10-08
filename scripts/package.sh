@@ -77,4 +77,21 @@ else
     echo "Not notarized (--no-notarize): Gatekeeper will warn on other Macs."
 fi
 cp INSTALL.txt build/
-echo "Built $PKG (send it with build/INSTALL.txt)"
+
+# The .dmg to share: the pkg and INSTALL.txt in one download. An input method can't be
+# drag-installed like an app, so the pkg stays the installer.
+DMG="build/NuktaBangla-$VERSION.dmg"
+APP_ID="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+mkdir -p "$WORK/dmg"
+cp "$PKG" "$WORK/dmg/Install Nukta Bangla.pkg"
+cp INSTALL.txt "$WORK/dmg/"
+rm -f "$DMG"
+hdiutil create -volname "Nukta Bangla $VERSION" -srcfolder "$WORK/dmg" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+rm -rf "$WORK"
+codesign --force --timestamp --sign "$APP_ID" "$DMG"
+if [ -n "$NOTARIZE" ]; then
+    xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple "$DMG"
+    spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
+fi
+echo "Built $DMG (share this) and $PKG"

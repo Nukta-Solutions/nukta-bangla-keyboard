@@ -106,24 +106,26 @@ riti is under the Mozilla Public License 2.0, which applies file by file:
 
 ## Sharing with friends
 ```
-scripts/package.sh         # macOS: build/NuktaBangla-<version>.pkg + build/INSTALL.txt
+scripts/package.sh         # macOS: build/NuktaBangla-<version>.dmg (the pkg + INSTALL.txt)
 linux/package.sh           # Linux: build/nukta-bangla-<version>-linux.sh (one self-extracting file)
 ```
 On Linux the whole install is then `bash nukta-bangla-<version>-linux.sh` — it carries the engine,
 offers to install IBus and a Bangla font, and needs neither git nor this repository.
 
-Send both macOS files. The .pkg runs on Apple Silicon and Intel Macs (macOS 13+) and installs into
-`/Library/Input Methods`; [INSTALL.txt](INSTALL.txt) walks through it in Bangla. Bump
+On macOS, send the .dmg. It holds the installer (`Install Nukta Bangla.pkg`) and
+[INSTALL.txt](INSTALL.txt), which walks through it in Bangla; the .pkg is also left in `build/` on its own.
+It runs on Apple Silicon and Intel Macs (macOS 13+) and installs into `/Library/Input Methods`. An input
+method can't be dragged into place like an app, so the .dmg carries the pkg rather than the app. Bump
 `CFBundleShortVersionString` (and `CFBundleVersion`) in Info.plist before sharing a new version.
 
 `package.sh` signs the app and the .pkg with Nukta Solutions' Developer ID certificates, notarizes the .pkg
-and staples the ticket, so it installs with no Gatekeeper warning. It needs, in your keychain:
+and the .dmg and staples their tickets, so it installs with no Gatekeeper warning. It needs, in your keychain:
 - the **Developer ID Application** and **Developer ID Installer** certificates
   (Xcode → Settings → Accounts → Manage Certificates);
 - a notarytool profile named `nukta`, created once with an app-specific password from account.apple.com:
   `xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id Y2466L4CFL`.
 
-`scripts/package.sh --no-notarize` makes a signed but un-notarized .pkg for a quick test.
+`scripts/package.sh --no-notarize` makes a signed but un-notarized .pkg and .dmg for a quick test.
 
 ## Development
 Needs Rust for riti: `curl https://sh.rustup.rs -sSf | sh` (once).

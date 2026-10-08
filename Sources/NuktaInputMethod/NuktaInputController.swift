@@ -87,23 +87,15 @@ final class NuktaInputController: IMKInputController {
         NSApp.windows.filter(\.isVisible).forEach { $0.orderFrontRegardless() }
     }
 
-    /// The notice MPL 2.0 asks for: phonetic typing uses riti and code from Lekho, and their
-    /// source ships in the app.
+    /// A one-word credit for the phonetic engine. The full licence notices ship in Resources/Licenses.
     private static var credits: NSAttributedString {
-        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-        let text = NSMutableAttributedString(
-            string: "ফোনেটিক টাইপিং OpenBangla-র riti ইঞ্জিন আর Lekho-র কোড দিয়ে তৈরি, Mozilla Public License 2.0-এর অধীনে। "
-                + "সেই অংশের সোর্স কোড ও লাইসেন্স অ্যাপের ভেতরেই আছে: NuktaBangla.app/Contents/Resources/Licenses\n",
-            attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
-        )
-        for (index, link) in ["github.com/OpenBangla/riti", "github.com/ARahim3/Lekho"].enumerated() {
-            if index > 0 { text.append(NSAttributedString(string: "  ·  ", attributes: [.font: font])) }
-            text.append(NSAttributedString(string: link, attributes: [.font: font, .link: URL(string: "https://\(link)")!]))
-        }
         let centered = NSMutableParagraphStyle()
         centered.alignment = .center
-        text.addAttribute(.paragraphStyle, value: centered, range: NSRange(location: 0, length: text.length))
-        return text
+        return NSAttributedString(string: "কৃতজ্ঞতা: riti", attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: centered,
+        ])
     }
 
     // MARK: Keys

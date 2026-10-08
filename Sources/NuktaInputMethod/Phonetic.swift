@@ -43,12 +43,34 @@ final class Phonetic {
 
     /// Shows the list for the word in progress under (or over) it, or hides it.
     func updatePanel(for client: Client) {
+        panelUpdate += 1
         guard composer.isComposing, !composer.candidates.isEmpty else {
             panel.hide()
             return
         }
+        let (cursor, exact) = CursorRect.of(client)
+        showPanel(at: cursor)
+        guard !exact else { return }
+
+        // The app doesn't know where the word is yet (Chrome, for the first letters of a word):
+        // ask again shortly, and move the list there once it does.
+        let update = panelUpdate
+        for delay in [0.03, 0.08, 0.15, 0.3, 0.5, 0.8, 1.2] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak client] in
+                guard let self, let client, update == self.panelUpdate, self.composer.isComposing,
+                      let rect = CursorRect.exact(client) else { return }
+                self.panelUpdate += 1
+                self.showPanel(at: rect)
+            }
+        }
+    }
+
+    /// Counts panel updates, so a late answer for an earlier key can't move the list.
+    private var panelUpdate = 0
+
+    private func showPanel(at cursor: NSRect) {
         panel.show(candidates: composer.candidates, auxiliary: composer.auxiliary,
-                   selected: composer.selectedIndex, cursor: CursorRect.of(client),
+                   selected: composer.selectedIndex, cursor: cursor,
                    position: Settings.popupPosition, direction: Settings.popupDirection)
     }
 

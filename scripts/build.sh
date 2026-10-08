@@ -29,16 +29,12 @@ cp "$BIN" "$APP/Contents/MacOS/NuktaBangla"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/icon.tiff Resources/AppIcon.icns "$APP/Contents/Resources/"
 
-# MPL 2.0 asks that every copy of the app says where the source of its MPL files is: here it
-# ships inside the app, with the licences of the Rust crates riti uses.
+# MPL 2.0 asks that every copy of the app says where riti's source is: here it ships inside the
+# app, with the licences of the Rust crates riti uses.
 LICENSES="$APP/Contents/Resources/Licenses"
 mkdir -p "$LICENSES"
 cp Licenses/MPL-2.0.txt Licenses/THIRD-PARTY-NOTICES.txt "$LICENSES/"
-zip -qr -X "$LICENSES/MPL-source.zip" \
-    riti-bridge/Cargo.toml riti-bridge/Cargo.lock riti-bridge/src riti-bridge/riti riti-bridge/riti.patch \
-    Sources/CRiti Sources/NuktaPhonetic \
-    Sources/NuktaInputMethod/CandidatePanel.swift Sources/NuktaInputMethod/CursorRect.swift \
-    -x '*.DS_Store'
+zip -qr -X "$LICENSES/MPL-source.zip" riti-bridge/riti riti-bridge/riti.patch -x '*.DS_Store'
 
 if [ -n "$RELEASE" ]; then
     # Gatekeeper and notarization need a Developer ID signature with the hardened runtime.

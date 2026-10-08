@@ -34,9 +34,10 @@ cp -R build/NuktaBangla.app "$WORK/root/"
 pkgbuild --analyze --root "$WORK/root" "$WORK/components.plist"
 /usr/libexec/PlistBuddy -c 'Set :0:BundleIsRelocatable false' "$WORK/components.plist"
 
-# The installer won't replace a bundle with a different identifier: it would put the new app in
-# NuktaBangla.localized/ beside the old com.asifmahmud build. Remove that build (and any such
-# side-by-side copy) first.
+# The installer won't replace a bundle with a different identifier (the old com.asifmahmud build):
+# it decides, before preinstall runs, to put the new app in NuktaBangla.localized/ (or
+# NuktaBangla-1.localized/ …) instead. preinstall removes the old build; postinstall moves the new
+# app back to NuktaBangla.app and removes every side-by-side copy.
 cat > "$WORK/scripts/preinstall" <<'SH'
 #!/bin/bash
 DIR="/Library/Input Methods"
@@ -45,14 +46,18 @@ if [ -n "$ID" ] && [ "$ID" != "com.nuktasolutions.inputmethod.NuktaBangla" ]; th
     killall NuktaBangla 2>/dev/null || true
     rm -rf "$DIR/NuktaBangla.app"
 fi
-rm -rf "$DIR/NuktaBangla.localized"
 exit 0
 SH
 chmod +x "$WORK/scripts/preinstall"
 
-# Stop the running old version so the new one loads.
+# Then stop the running old version so the new one loads.
 cat > "$WORK/scripts/postinstall" <<'SH'
 #!/bin/bash
+DIR="/Library/Input Methods"
+# The newest side-by-side copy is the one just installed; older ones are left from past installs.
+NEW="$(ls -td "$DIR"/NuktaBangla*.localized/NuktaBangla.app 2>/dev/null | head -1)"
+[ -d "$DIR/NuktaBangla.app" ] || [ -z "$NEW" ] || mv "$NEW" "$DIR/NuktaBangla.app"
+rm -rf "$DIR"/NuktaBangla*.localized
 killall NuktaBangla 2>/dev/null || true
 exit 0
 SH

@@ -1,111 +1,81 @@
-// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of
-// the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Adapted from Lekho (https://github.com/ARahim3/Lekho), engine/src/lib.rs.
+//! The static library the app links: riti's C API, plus a keycode lookup so Swift doesn't need to
+//! know riti's key numbering.
 
-//! Static library linked into Nukta Bangla: riti's C API (its `#[no_mangle]` functions come along
-//! with the crate) plus a character → riti keycode lookup.
-
+// riti's C functions live in a private module of the riti crate. Naming the crate here links it in,
+// and its `#[no_mangle]` functions end up in this static library as they are.
 extern crate riti;
 
-/// Converts a character typed on a US layout to a riti keycode. Returns 0 if riti doesn't use it.
+use riti::keycodes::*;
+
+/// riti's keycode for a character typed on a US keyboard, or 0 if riti has no key for it.
+///
+/// Uppercase letters have their own codes in riti (`VC_A_SHIFT`…), and shifted symbols (`!`, `:`…)
+/// are keys of their own, so the character alone is enough.
 #[no_mangle]
 pub extern "C" fn nukta_riti_keycode(ch: u32) -> u16 {
     match char::from_u32(ch) {
-        Some('`') => riti::keycodes::VC_GRAVE,
-        Some('~') => riti::keycodes::VC_TILDE,
-        Some('1') => riti::keycodes::VC_1,
-        Some('2') => riti::keycodes::VC_2,
-        Some('3') => riti::keycodes::VC_3,
-        Some('4') => riti::keycodes::VC_4,
-        Some('5') => riti::keycodes::VC_5,
-        Some('6') => riti::keycodes::VC_6,
-        Some('7') => riti::keycodes::VC_7,
-        Some('8') => riti::keycodes::VC_8,
-        Some('9') => riti::keycodes::VC_9,
-        Some('0') => riti::keycodes::VC_0,
-        Some('!') => riti::keycodes::VC_EXCLAIM,
-        Some('@') => riti::keycodes::VC_AT,
-        Some('#') => riti::keycodes::VC_HASH,
-        Some('$') => riti::keycodes::VC_DOLLAR,
-        Some('%') => riti::keycodes::VC_PERCENT,
-        Some('^') => riti::keycodes::VC_CIRCUM,
-        Some('&') => riti::keycodes::VC_AMPERSAND,
-        Some('*') => riti::keycodes::VC_ASTERISK,
-        Some('(') => riti::keycodes::VC_PAREN_LEFT,
-        Some(')') => riti::keycodes::VC_PAREN_RIGHT,
-        Some('-') => riti::keycodes::VC_MINUS,
-        Some('_') => riti::keycodes::VC_UNDERSCORE,
-        Some('=') => riti::keycodes::VC_EQUALS,
-        Some('+') => riti::keycodes::VC_PLUS,
-        Some('a') => riti::keycodes::VC_A,
-        Some('b') => riti::keycodes::VC_B,
-        Some('c') => riti::keycodes::VC_C,
-        Some('d') => riti::keycodes::VC_D,
-        Some('e') => riti::keycodes::VC_E,
-        Some('f') => riti::keycodes::VC_F,
-        Some('g') => riti::keycodes::VC_G,
-        Some('h') => riti::keycodes::VC_H,
-        Some('i') => riti::keycodes::VC_I,
-        Some('j') => riti::keycodes::VC_J,
-        Some('k') => riti::keycodes::VC_K,
-        Some('l') => riti::keycodes::VC_L,
-        Some('m') => riti::keycodes::VC_M,
-        Some('n') => riti::keycodes::VC_N,
-        Some('o') => riti::keycodes::VC_O,
-        Some('p') => riti::keycodes::VC_P,
-        Some('q') => riti::keycodes::VC_Q,
-        Some('r') => riti::keycodes::VC_R,
-        Some('s') => riti::keycodes::VC_S,
-        Some('t') => riti::keycodes::VC_T,
-        Some('u') => riti::keycodes::VC_U,
-        Some('v') => riti::keycodes::VC_V,
-        Some('w') => riti::keycodes::VC_W,
-        Some('x') => riti::keycodes::VC_X,
-        Some('y') => riti::keycodes::VC_Y,
-        Some('z') => riti::keycodes::VC_Z,
-        Some('A') => riti::keycodes::VC_A_SHIFT,
-        Some('B') => riti::keycodes::VC_B_SHIFT,
-        Some('C') => riti::keycodes::VC_C_SHIFT,
-        Some('D') => riti::keycodes::VC_D_SHIFT,
-        Some('E') => riti::keycodes::VC_E_SHIFT,
-        Some('F') => riti::keycodes::VC_F_SHIFT,
-        Some('G') => riti::keycodes::VC_G_SHIFT,
-        Some('H') => riti::keycodes::VC_H_SHIFT,
-        Some('I') => riti::keycodes::VC_I_SHIFT,
-        Some('J') => riti::keycodes::VC_J_SHIFT,
-        Some('K') => riti::keycodes::VC_K_SHIFT,
-        Some('L') => riti::keycodes::VC_L_SHIFT,
-        Some('M') => riti::keycodes::VC_M_SHIFT,
-        Some('N') => riti::keycodes::VC_N_SHIFT,
-        Some('O') => riti::keycodes::VC_O_SHIFT,
-        Some('P') => riti::keycodes::VC_P_SHIFT,
-        Some('Q') => riti::keycodes::VC_Q_SHIFT,
-        Some('R') => riti::keycodes::VC_R_SHIFT,
-        Some('S') => riti::keycodes::VC_S_SHIFT,
-        Some('T') => riti::keycodes::VC_T_SHIFT,
-        Some('U') => riti::keycodes::VC_U_SHIFT,
-        Some('V') => riti::keycodes::VC_V_SHIFT,
-        Some('W') => riti::keycodes::VC_W_SHIFT,
-        Some('X') => riti::keycodes::VC_X_SHIFT,
-        Some('Y') => riti::keycodes::VC_Y_SHIFT,
-        Some('Z') => riti::keycodes::VC_Z_SHIFT,
-        Some('[') => riti::keycodes::VC_BRACKET_LEFT,
-        Some(']') => riti::keycodes::VC_BRACKET_RIGHT,
-        Some('\\') => riti::keycodes::VC_BACK_SLASH,
-        Some('{') => riti::keycodes::VC_BRACE_LEFT,
-        Some('}') => riti::keycodes::VC_BRACE_RIGHT,
-        Some('|') => riti::keycodes::VC_BAR,
-        Some(';') => riti::keycodes::VC_SEMICOLON,
-        Some('\'') => riti::keycodes::VC_APOSTROPHE,
-        Some(',') => riti::keycodes::VC_COMMA,
-        Some('.') => riti::keycodes::VC_PERIOD,
-        Some('/') => riti::keycodes::VC_SLASH,
-        Some(':') => riti::keycodes::VC_COLON,
-        Some('"') => riti::keycodes::VC_QUOTE,
-        Some('<') => riti::keycodes::VC_LESS,
-        Some('>') => riti::keycodes::VC_GREATER,
-        Some('?') => riti::keycodes::VC_QUESTION,
+        Some(ch) => keycode(ch),
+        None => 0,
+    }
+}
+
+fn keycode(ch: char) -> u16 {
+    match ch {
+        'a'..='z' => VC_A + (ch as u16 - 'a' as u16),
+        'A'..='Z' => VC_A_SHIFT + (ch as u16 - 'A' as u16),
+        // VC_1…VC_9 are consecutive, VC_0 comes after them (as on the keyboard).
+        '1'..='9' => VC_1 + (ch as u16 - '1' as u16),
+        '0' => VC_0,
+        '`' => VC_GRAVE,
+        '~' => VC_TILDE,
+        '!' => VC_EXCLAIM,
+        '@' => VC_AT,
+        '#' => VC_HASH,
+        '$' => VC_DOLLAR,
+        '%' => VC_PERCENT,
+        '^' => VC_CIRCUM,
+        '&' => VC_AMPERSAND,
+        '*' => VC_ASTERISK,
+        '(' => VC_PAREN_LEFT,
+        ')' => VC_PAREN_RIGHT,
+        '-' => VC_MINUS,
+        '_' => VC_UNDERSCORE,
+        '=' => VC_EQUALS,
+        '+' => VC_PLUS,
+        '[' => VC_BRACKET_LEFT,
+        ']' => VC_BRACKET_RIGHT,
+        '{' => VC_BRACE_LEFT,
+        '}' => VC_BRACE_RIGHT,
+        '\\' => VC_BACK_SLASH,
+        '|' => VC_BAR,
+        ';' => VC_SEMICOLON,
+        ':' => VC_COLON,
+        '\'' => VC_APOSTROPHE,
+        '"' => VC_QUOTE,
+        ',' => VC_COMMA,
+        '.' => VC_PERIOD,
+        '<' => VC_LESS,
+        '>' => VC_GREATER,
+        '/' => VC_SLASH,
+        '?' => VC_QUESTION,
         _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn letters_digits_and_symbols() {
+        assert_eq!(nukta_riti_keycode('a' as u32), VC_A);
+        assert_eq!(nukta_riti_keycode('z' as u32), VC_Z);
+        assert_eq!(nukta_riti_keycode('Z' as u32), VC_Z_SHIFT);
+        assert_eq!(nukta_riti_keycode('9' as u32), VC_9);
+        assert_eq!(nukta_riti_keycode('0' as u32), VC_0);
+        assert_eq!(nukta_riti_keycode('?' as u32), VC_QUESTION);
+        assert_eq!(nukta_riti_keycode(' ' as u32), 0);
+        assert_eq!(nukta_riti_keycode('ক' as u32), 0);
+        assert_eq!(nukta_riti_keycode(0xD800), 0);
     }
 }

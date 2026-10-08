@@ -1,333 +1,371 @@
-// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of
-// the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Adapted from Lekho (https://github.com/ARahim3/Lekho), Lekho/Sources/InputController.swift: the
-// key handling and candidate ordering, without AppKit so it can be tested.
-
 import Foundation
 
-/// Phonetic typing with a candidate list. Keys go in; what to commit, what to show as marked
-/// text, and the list to show come out. The input controller applies them to the app.
+/// Turns keys into Bangla with riti (Avro Phonetic), and keeps the suggestion list for the word in
+/// progress. Pure logic, no AppKit: the input controller shows `Output` and `candidates`.
+///
+/// riti contexts are expensive, and each one rewrites riti's file of learned picks from its own
+/// copy, so the app keeps one composer per process.
 public final class PhoneticComposer {
     public enum Key: Equatable {
         /// A printable key, as on a US layout.
         case character(Character, shift: Bool)
-        /// ⌫; with ⌥ it deletes the whole word.
+        /// ⌫, or ⌥⌫ for the whole word.
         case backspace(wholeWord: Bool)
         case enter, escape, space
         case tab(backward: Bool)
         case up, down, left, right
     }
 
+    /// What one key does to the app's text.
     public struct Output: Equatable {
-        /// Final text to insert in place of the marked text.
+        /// Final text to insert, replacing the marked text.
         public var insert = ""
-        /// Marked text to show after `insert`; empty when nothing is being composed.
+        /// Marked (underlined) text to show afterwards; "" = none.
         public var marked = ""
-        /// False: the app should handle the key as well (Space, arrows…).
+        /// False: the app must also handle the key (space, arrows…).
         public var handled = true
+
+        public init(insert: String = "", marked: String = "", handled: Bool = true) {
+            self.insert = insert
+            self.marked = marked
+            self.handled = handled
+        }
     }
 
     public private(set) var options: PhoneticOptions
-    /// ←/→ move the selection (the list is drawn as a row).
+    /// ← → also move the selection (the list is a row).
     public var horizontalNavigation = false
-
-    /// The list to show; empty when there's nothing to pick from.
+    /// The list to show; empty = no list.
     public private(set) var candidates: [String] = []
     public private(set) var selectedIndex = 0
-    /// What was typed, shown above the list.
+    /// What was typed (roman), shown above the list.
     public private(set) var auxiliary = ""
 
-    public var isComposing: Bool { riti.hasSession }
+    /// A word is in progress.
+    public var isComposing: Bool {
+        !candidates.isEmpty || !lonely.isEmpty
+    }
 
-    private let riti: Riti
-    private let picks: PhoneticFirstPicks
-    private var current: RitiSuggestion?
-    /// `order[i]` is riti's index for `candidates[i]`: emoji may be filtered out and phonetic-first
-    /// moves the transliteration to the top.
-    private var order: [Int] = []
-    /// Phonetic-first: the literal transliteration, when it is in the list (always at the top).
-    private var literalCandidate: String?
-    /// The selection was moved with arrows/Tab since the last letter.
-    private var userNavigated = false
+    private let directory: URL
+    private var riti: RitiContext
+    /// Phonetic-first only: a context with suggestions off, fed the same keys, whose (lonely) answer
+    /// is the literal transliteration. riti's list contains it but doesn't say which entry it is.
+    private var literalRiti: RitiContext?
+    private let picks: PickMemory
 
-    /// Keys after which riti keeps the selection we pass in instead of resetting it.
-    private static let selectionPreservingKeys: Set<Character> = [
-        ".", "?", "!", ",", ":", ";", "-", "_", ")", "}", "]", "'", "\"",
-    ]
-    private static let banglaDigits = Array("০১২৩৪৫৬৭৮৯")
+    /// The word when riti gives no list (phonetic-only mode, a lone punctuation mark).
+    private var lonely = ""
+    /// For each candidate, its index in riti's own list (the order differs after filtering and
+    /// moving the literal up).
+    private var ritiIndices: [Int] = []
+    /// Index in `candidates` of the literal transliteration, if it is there.
+    private var literalIndex: Int?
+    /// The literal transliteration of what was typed, from `literalRiti`.
+    private var literal = ""
+    /// The user moved the selection since the last key that went to riti.
+    private var selectionMoved = false
 
-    /// `directory`: where riti and the pick memory keep what they learn.
+    /// Keys riti handles as punctuation: typed after the user moved the selection, riti keeps the
+    /// selection instead of picking its own default (riti-bridge/riti/src/phonetic/method.rs).
+    private static let selectionKeepers: Set<Character> = [".", "?", "!", ",", ":", ";", "-", "_", ")", "}", "]", "'", "\""]
+
+    /// `directory`: where riti and the pick memory keep what they learn; created if missing.
     public init(options: PhoneticOptions, directory: URL) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.options = options
-        riti = Riti(options: options, userDirectory: directory)
-        picks = PhoneticFirstPicks(directory: directory)
+        self.directory = directory
+        picks = PickMemory(directory: directory)
+        (riti, literalRiti) = Self.makeContexts(options: options, directory: directory)
     }
 
-    /// Settings changed: the word in progress is dropped (clear the marked text).
-    public func update(options: PhoneticOptions) {
-        guard options != self.options else { return }
-        let old = self.options
-        self.options = options
-        // Only these change riti itself; the rest apply from the next key.
-        guard options.mode != old.mode || options.autocorrect != old.autocorrect
-                || options.englishWord != old.englishWord else { return }
-        riti.finish()
-        reset()
-        riti.rebuild(options: options)
+    /// A change to the mode, autocorrect or the English word rebuilds riti and drops the word in
+    /// progress. Emoji and the colon apply from the next key.
+    public func update(options newOptions: PhoneticOptions) {
+        let rebuild = newOptions.mode != options.mode || newOptions.autocorrect != options.autocorrect
+            || newOptions.englishWord != options.englishWord
+        if rebuild {
+            discard()
+            literalRiti = nil
+            (riti, literalRiti) = Self.makeContexts(options: newOptions, directory: directory)
+        }
+        options = newOptions
+    }
+
+    public func handle(_ key: Key) -> Output {
+        switch key {
+        case .character(let character, let shift):
+            return type(character, shift: shift)
+        case .backspace(let wholeWord):
+            return backspace(wholeWord: wholeWord)
+        case .enter:
+            guard isComposing else { return Output(handled: false) }
+            return commit()
+        case .escape:
+            guard isComposing else { return Output(handled: false) }
+            discard()
+            return Output()
+        case .space:
+            guard isComposing else { return Output(handled: false) }
+            var out = commit()
+            out.handled = false
+            return out
+        case .tab(let backward):
+            return moveSelection(by: backward ? -1 : 1)
+        case .down:
+            return moveSelection(by: 1)
+        case .up:
+            return moveSelection(by: -1)
+        case .left, .right:
+            if horizontalNavigation { return moveSelection(by: key == .left ? -1 : 1) }
+            return commitAndPass()
+        }
+    }
+
+    /// Commits the selected word (a click elsewhere, a switch to another app).
+    public func commit() -> Output {
+        guard isComposing else { return Output() }
+        if candidates.isEmpty {
+            let text = lonely
+            endWord(learning: nil)
+            return Output(insert: text)
+        }
+        return commit(at: selectedIndex)
+    }
+
+    /// Commits `candidates[index]` (a click in the list).
+    public func commit(at index: Int) -> Output {
+        guard candidates.indices.contains(index) else {
+            return isComposing ? Output(marked: marked) : Output()
+        }
+        let text = candidates[index]
+        if options.mode == .phoneticFirst, let literalIndex {
+            if index == literalIndex || PickMemory.trim(text) == PickMemory.trim(literal) {
+                picks.forget(auxiliary)
+            } else if !Self.containsEmoji(text) {
+                picks.remember(text, for: auxiliary)
+            }
+        }
+        endWord(learning: options.mode == .smart ? ritiIndices[index] : nil)
+        return Output(insert: text)
+    }
+
+    /// Drops the word in progress, with no output.
+    public func discard() {
+        endWord(learning: nil)
+    }
+
+    /// Any emoji, including a text symbol made to show as one (© + U+FE0F = ©️). Plain ©, digits,
+    /// `#` and `*` (emoji only with U+FE0F or a keycap after them) are not.
+    static func containsEmoji(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            scalar.properties.isEmojiPresentation || scalar.value == 0xFE0F
+                || (scalar.properties.isEmoji && scalar.value >= 0x2000)
+        }
     }
 
     // MARK: Keys
 
-    public func handle(_ key: Key) -> Output {
-        let composing = riti.hasSession
-        let lonely = current?.lonely != nil
+    private func type(_ character: Character, shift: Bool) -> Output {
+        if character == ":" && !options.colonIsBisarga {
+            return Output(insert: commit().insert + ":")
+        }
 
-        switch key {
-        case .enter:
-            // Commits without a newline.
-            return composing ? commit() : pass()
-
-        case .escape:
-            guard composing else { return pass() }
-            riti.finish()
-            reset()
-            return Output()
-
-        case .backspace(let wholeWord):
-            guard composing else { return pass() }
-            current = riti.backspace(wholeWord: wholeWord)
-            guard riti.hasSession else {
-                reset()
-                return Output()
+        if let digit = Self.asciiDigit(character) {
+            if !isComposing {
+                return Output(insert: Self.banglaDigit(digit))
             }
-            userNavigated = false
-            refreshCandidates(preserveSelection: false)
-            return Output(marked: markedText)
-
-        case .space:
-            return composing ? commit(handled: false) : pass()
-
-        case .tab(let backward):
-            return navigate(forward: !backward, composing: composing, lonely: lonely)
-        case .up:
-            return navigate(forward: false, composing: composing, lonely: lonely)
-        case .down:
-            return navigate(forward: true, composing: composing, lonely: lonely)
-        case .left, .right:
-            guard horizontalNavigation else { return composing ? commit(handled: false) : pass() }
-            return navigate(forward: key == .right, composing: composing, lonely: lonely)
-
-        case .character(let character, let shift):
-            if character == ":", !options.colonIsBisarga {
-                // A plain colon: finish the word, then type it.
-                var out = composing ? commit() : Output()
-                out.insert += ":"
-                return out
-            }
-            if let digit = character.wholeNumberValue, character.isASCII {
-                if !composing {
-                    return Output(insert: String(Self.banglaDigits[digit]))
+            if (1...9).contains(digit) {
+                if !candidates.isEmpty, digit <= candidates.count {
+                    return commit(at: digit - 1)
                 }
-                if digit >= 1 {
-                    if lonely {
-                        // No numbered list: finish the word, then type the Bangla digit.
-                        var out = commit()
-                        out.insert += String(Self.banglaDigits[digit])
-                        return out
-                    }
-                    if digit - 1 < candidates.count {
-                        return commit(at: digit - 1)
-                    }
+                if candidates.isEmpty {
+                    return Output(insert: commit().insert + Self.banglaDigit(digit))
                 }
             }
-            guard let code = Riti.keycode(for: character) else {
-                return composing ? commit(handled: false) : pass()
-            }
-            return feed(code, character: character, shift: shift)
         }
+
+        guard let code = RitiContext.keycode(for: character) else {
+            return commitAndPass()
+        }
+
+        // After the user moved the selection, punctuation keeps it: riti is told which entry it was.
+        let keepSelection = selectionMoved && !candidates.isEmpty && Self.selectionKeepers.contains(character)
+        if !keepSelection { selectionMoved = false }
+        let selection = keepSelection ? ritiIndices[selectedIndex] : 0
+
+        // riti only reports what was typed with a list; this keeps it for a lonely answer too.
+        auxiliary.append(character)
+        let suggestion = riti.key(code, shift: shift, selection: selection)
+        if let literalRiti, case .lonely(let text) = literalRiti.key(code, shift: shift) {
+            literal = text
+        }
+        show(suggestion, keptSelection: keepSelection)
+
+        if !riti.isComposing {
+            // riti ended the word itself: what it produced is final.
+            let text = marked
+            endWord(learning: nil)
+            return Output(insert: text)
+        }
+        return Output(marked: marked)
     }
 
-    /// Commits the selected candidate (Enter, click elsewhere, another app taking over…).
-    public func commit() -> Output {
-        commit(handled: true)
-    }
-
-    /// Commits the candidate at `index` of `candidates` (a click in the list).
-    public func commit(at index: Int) -> Output {
-        guard let current, !current.isEmpty else {
-            riti.finish()
-            reset()
+    private func backspace(wholeWord: Bool) -> Output {
+        guard isComposing else { return Output(handled: false) }
+        selectionMoved = false
+        if wholeWord { auxiliary = "" } else if !auxiliary.isEmpty { auxiliary.removeLast() }
+        let suggestion = riti.backspace(wholeWord: wholeWord)
+        if let literalRiti {
+            if case .lonely(let text) = literalRiti.backspace(wholeWord: wholeWord) {
+                literal = text
+            } else {
+                literal = ""
+            }
+        }
+        if suggestion == .empty || !riti.isComposing {
+            endWord(learning: nil)
             return Output()
         }
-
-        let text: String
-        if let lonely = current.lonely {
-            text = lonely
-            riti.finish()
-        } else if candidates.isEmpty {
-            text = ""
-            riti.finish()
-        } else {
-            let safe = min(max(index, 0), candidates.count - 1)
-            text = candidates[safe]
-            if options.mode == .phoneticFirst, let literal = literalCandidate {
-                picks.record(typed: auxiliary, chosen: text, literal: literal)
-            }
-            riti.committed(index: order[safe])
-        }
-        reset()
-        return Output(insert: text)
+        show(suggestion, keptSelection: false)
+        return Output(marked: marked)
     }
 
-    /// Drops the word in progress without committing it.
-    public func discard() {
-        riti.finish()
-        reset()
+    /// Up/down, Tab: move the selection, wrapping. With no list, the word is committed and the key
+    /// goes to the app.
+    private func moveSelection(by step: Int) -> Output {
+        guard isComposing else { return Output(handled: false) }
+        guard !candidates.isEmpty else { return commitAndPass() }
+        selectedIndex = (selectedIndex + step + candidates.count) % candidates.count
+        selectionMoved = true
+        return Output(marked: marked)
     }
 
-    // MARK: Internals
-
-    private func pass() -> Output {
-        Output(handled: false)
-    }
-
-    private func commit(handled: Bool) -> Output {
-        guard riti.hasSession else { return Output(handled: handled) }
-        var out = commit(at: selectedIndex)
-        out.handled = handled
+    private func commitAndPass() -> Output {
+        var out = commit()
+        out.handled = false
         return out
     }
 
-    private func navigate(forward: Bool, composing: Bool, lonely: Bool) -> Output {
-        guard composing else { return pass() }
-        // Phonetic-only has no list: finish the word and let the key do its usual job.
-        guard !lonely, !candidates.isEmpty else { return commit(handled: false) }
-        let count = candidates.count
-        selectedIndex = forward ? (selectedIndex + 1) % count : (selectedIndex + count - 1) % count
-        userNavigated = true
-        return Output(marked: markedText)
+    // MARK: State
+
+    /// The marked text: the selected candidate, or the lonely text when there is no list.
+    private var marked: String {
+        candidates.indices.contains(selectedIndex) ? candidates[selectedIndex] : lonely
     }
 
-    private func feed(_ code: UInt16, character: Character, shift: Bool) -> Output {
-        // A selection the user moved to survives a punctuation key (riti keeps the index we pass);
-        // any other key resets it.
-        let preserve = riti.hasSession && userNavigated && Self.selectionPreservingKeys.contains(character)
-        let selection = order.indices.contains(selectedIndex) ? order[selectedIndex] : 0
-
-        current = riti.feed(code, shift: shift, selection: selection)
-
-        if riti.hasSession {
-            if !preserve { userNavigated = false }
-            refreshCandidates(preserveSelection: preserve)
-            return Output(marked: markedText)
+    /// Builds the list from riti's answer.
+    private func show(_ suggestion: RitiSuggestion, keptSelection: Bool) {
+        switch suggestion {
+        case .empty:
+            clearList()
+        case .lonely(let text):
+            clearList()
+            lonely = text
+        case .list(let entries, let typed, let ritiSelection):
+            lonely = ""
+            auxiliary = typed
+            buildList(entries, ritiSelection: ritiSelection, keptSelection: keptSelection)
         }
-
-        // riti finished the word on its own (a lone punctuation mark…).
-        var text = ""
-        if let suggestion = current, !suggestion.isEmpty {
-            if let lonely = suggestion.lonely {
-                text = lonely
-            } else {
-                refreshCandidates(preserveSelection: false)
-                text = candidates.indices.contains(selectedIndex) ? candidates[selectedIndex] : ""
-            }
-        }
-        riti.finish()
-        reset()
-        return Output(insert: text)
     }
 
-    private var markedText: String {
-        if let lonely = current?.lonely { return lonely }
-        return candidates.indices.contains(selectedIndex) ? candidates[selectedIndex] : ""
-    }
-
-    private func reset() {
-        current = nil
-        candidates = []
-        order = []
-        literalCandidate = nil
-        auxiliary = ""
-        selectedIndex = 0
-        userNavigated = false
-    }
-
-    /// Rebuilds the list from `current` and picks the default selection. `preserveSelection`:
-    /// punctuation typed after the user navigated, so riti's preserved index wins.
-    private func refreshCandidates(preserveSelection: Bool) {
-        candidates = []
-        order = []
-        literalCandidate = nil
-        auxiliary = ""
-        selectedIndex = 0
-
-        guard let suggestion = current, suggestion.lonely == nil, !suggestion.candidates.isEmpty else { return }
-
-        var items = suggestion.candidates.enumerated().map { (index: $0.offset, text: $0.element) }
+    private func buildList(_ entries: [String], ritiSelection: Int, keptSelection: Bool) {
+        var items = entries.enumerated().map { (text: $0.element, riti: $0.offset) }
         if !options.emoji {
-            let withoutEmoji = items.filter { !Self.containsEmoji($0.text) }
-            if !withoutEmoji.isEmpty { items = withoutEmoji }
+            let plain = items.filter { !Self.containsEmoji($0.text) }
+            if !plain.isEmpty { items = plain }
         }
 
-        // Phonetic-first: the literal transliteration goes on top.
-        if options.mode == .phoneticFirst, let literal = riti.literal {
-            let wanted = Self.straightenQuotes(literal)
-            if let position = items.firstIndex(where: { Self.straightenQuotes($0.text) == wanted }) {
-                let item = items.remove(at: position)
-                items.insert(item, at: 0)
-                literalCandidate = item.text
+        literalIndex = nil
+        if options.mode == .phoneticFirst, !literal.isEmpty {
+            let target = Self.straightened(literal)
+            if let found = items.firstIndex(where: { Self.straightened($0.text) == target }) {
+                items.insert(items.remove(at: found), at: 0)
+                literalIndex = 0
             }
         }
 
         candidates = items.map(\.text)
-        order = items.map(\.index)
-        auxiliary = suggestion.auxiliary
+        ritiIndices = items.map(\.riti)
+        guard !candidates.isEmpty else {
+            selectedIndex = 0
+            return
+        }
+        let ritiDefault = ritiIndices.firstIndex(of: ritiSelection) ?? 0
 
-        // riti's remembered pick, or the index it preserved after punctuation (0 if none).
-        let ritiSelection = order.firstIndex(of: suggestion.previouslySelected) ?? 0
-        if options.mode == .phoneticFirst {
-            if preserveSelection {
-                selectedIndex = ritiSelection
-            } else if let pick = picks.pick(forTyped: auxiliary),
-                      let index = candidates.firstIndex(where: { PhoneticFirstPicks.core($0) == pick }) {
-                selectedIndex = index
+        var selection: Int
+        if keptSelection || options.mode != .phoneticFirst {
+            selection = ritiDefault
+        } else if let literalIndex {
+            selection = literalIndex
+            if let pick = picks.pick(for: auxiliary),
+               let picked = candidates.firstIndex(where: { PickMemory.trim($0) == pick }) {
+                selection = picked
             }
         } else {
-            selectedIndex = ritiSelection
+            selection = ritiDefault
         }
 
-        // riti can rank an emoji matched by name above dictionary words (`boish` → 🗺️), which would
-        // make Space commit an emoji. Only an explicit pick commits one, unless the word is an
-        // emoticon like `:)`, where the emoji is the point.
-        let typedWord = PhoneticFirstPicks.core(auxiliary)
-        if !preserveSelection,
-           typedWord.first?.isLetter == true,
-           candidates.indices.contains(selectedIndex),
-           Self.containsEmoji(candidates[selectedIndex]),
-           let firstWord = candidates.firstIndex(where: { !Self.containsEmoji($0) }) {
-            selectedIndex = firstWord
+        // Space must never commit an emoji nobody chose. A typed emoticon (`:)`) is exempt.
+        if !keptSelection, auxiliary.first?.isLetter == true, Self.containsEmoji(candidates[selection]),
+           let plain = candidates.firstIndex(where: { !Self.containsEmoji($0) }) {
+            selection = plain
         }
+        selectedIndex = selection
     }
 
-    static func containsEmoji(_ text: String) -> Bool {
-        text.unicodeScalars.contains {
-            // isEmoji alone is also true for ASCII digits, '#' and '*'. U+FE0F asks for emoji
-            // presentation of a text symbol (©️, ❤️).
-            $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value >= 0x2000) || $0.value == 0xFE0F
-        }
+    private func clearList() {
+        candidates = []
+        ritiIndices = []
+        literalIndex = nil
+        selectedIndex = 0
     }
 
-    /// riti's list uses smart quotes (“ ” ‘ ’) but its transliteration doesn't.
-    private static func straightenQuotes(_ text: String) -> String {
-        guard text.contains(where: { "“”‘’".contains($0) }) else { return text }
-        return String(text.map { ch -> Character in
-            switch ch {
-            case "“", "”": return "\""
-            case "‘", "’": return "'"
-            default: return ch
+    /// Ends the word in both contexts and resets. `learning`: riti index of the pick for riti to
+    /// learn (smart mode).
+    private func endWord(learning ritiIndex: Int?) {
+        if let ritiIndex {
+            riti.committed(index: ritiIndex)
+        } else {
+            riti.finish()
+        }
+        literalRiti?.finish()
+        clearList()
+        lonely = ""
+        auxiliary = ""
+        literal = ""
+        selectionMoved = false
+    }
+
+    // MARK: Helpers
+
+    private static func makeContexts(options: PhoneticOptions, directory: URL) -> (RitiContext, RitiContext?) {
+        let main = RitiContext(directory: directory, suggestions: options.mode != .phoneticOnly,
+                               englishWord: options.englishWord, autocorrect: options.autocorrect)
+        let literal = options.mode == .phoneticFirst
+            ? RitiContext(directory: directory, suggestions: false, englishWord: false, autocorrect: false)
+            : nil
+        return (main, literal)
+    }
+
+    /// riti's list has curly quotes where the literal transliteration has straight ones.
+    private static func straightened(_ text: String) -> String {
+        var result = ""
+        for character in text {
+            switch character {
+            case "“", "”": result.append("\"")
+            case "‘", "’": result.append("'")
+            default: result.append(character)
             }
-        })
+        }
+        return result
+    }
+
+    private static func asciiDigit(_ character: Character) -> Int? {
+        guard character.isASCII else { return nil }
+        return character.wholeNumberValue
+    }
+
+    private static func banglaDigit(_ digit: Int) -> String {
+        String(UnicodeScalar(0x09E6 + UInt32(digit))!)
     }
 }

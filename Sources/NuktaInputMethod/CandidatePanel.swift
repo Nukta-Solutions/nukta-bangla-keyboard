@@ -1,209 +1,268 @@
-// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of
-// the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Adapted from Lekho (https://github.com/ARahim3/Lekho), Lekho/Sources/CandidatePanel.swift: adds the
-// horizontal row and the above/below choice, and drops the font settings.
-
 import Cocoa
 
-/// The suggestion list: a borderless panel that never takes focus from the app being typed in.
+/// The suggestion list shown under (or over) the word being typed.
+///
+/// A borderless, non-activating panel: the app being typed in keeps focus, even while the list is
+/// clicked. It floats above normal windows, on every Space and over full-screen apps.
 final class CandidatePanel {
-    private var panel: NSPanel?
-    private var view: CandidateView?
-
-    /// A candidate was clicked. Parameter: its index.
+    /// A candidate was clicked (index into the whole list).
     var onSelect: ((Int) -> Void)?
+
+    private let panel: NSPanel
+    private let list = CandidateListView()
+
+    init() {
+        panel = ListPanel(contentRect: NSRect(x: 0, y: 0, width: 100, height: 40),
+                          styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isReleasedWhenClosed = false
+        panel.contentView = list
+        list.onSelect = { [weak self] index in self?.onSelect?(index) }
+    }
 
     func show(candidates: [String], auxiliary: String, selected: Int, cursor: NSRect,
               position: PopupPosition, direction: PopupDirection) {
-        if panel == nil { createPanel() }
-        guard let panel, let view else { return }
-
-        view.update(candidates: candidates, auxiliary: auxiliary, selected: selected, direction: direction)
-        let size = view.idealSize()
-        panel.setContentSize(size)
-
-        let gap: CGFloat = 4
-        let below = cursor.minY - size.height - gap
-        let above = cursor.maxY + gap
-        var origin = NSPoint(x: cursor.minX, y: position == .below ? below : above)
-
-        let center = NSPoint(x: cursor.midX, y: cursor.midY)
-        if let screen = NSScreen.screens.first(where: { $0.frame.contains(center) }) ?? NSScreen.main {
-            let frame = screen.visibleFrame
-            origin.x = max(frame.minX, min(origin.x, frame.maxX - size.width))
-            // No room on the preferred side: use the other one.
-            if position == .below, origin.y < frame.minY {
-                origin.y = above
-            } else if position == .above, origin.y + size.height > frame.maxY {
-                origin.y = below
-            }
-            origin.y = max(frame.minY, min(origin.y, frame.maxY - size.height))
+        guard !candidates.isEmpty else {
+            hide()
+            return
         }
-
-        panel.setFrameOrigin(origin)
-        panel.orderFront(nil)
+        list.update(candidates: candidates, auxiliary: auxiliary, selected: selected,
+                    horizontal: direction == .horizontal)
+        let size = list.fittingSize
+        panel.setFrame(Self.frame(for: size, cursor: cursor, position: position), display: false)
+        list.needsDisplay = true
+        panel.display()
+        // The shadow follows the drawn (rounded) shape, so it is redone after drawing.
+        panel.invalidateShadow()
+        panel.orderFrontRegardless()
     }
 
     func hide() {
-        panel?.orderOut(nil)
+        list.cancelPress()
+        panel.orderOut(nil)
     }
 
-    private func createPanel() {
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 240, height: 100),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: true
-        )
-        panel.level = .popUpMenu
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.hasShadow = true
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    /// Left edge at the cursor; under it (or over it) with a 4 pt gap, on the other side when the
+    /// preferred one has no room, and always inside the visible part of the cursor's screen.
+    private static func frame(for size: NSSize, cursor: NSRect, position: PopupPosition) -> NSRect {
+        let gap: CGFloat = 4
+        let screen = NSScreen.screens.first { $0.frame.contains(cursor.origin) }
+            ?? NSScreen.screens.first { $0.frame.intersects(cursor) }
+            ?? NSScreen.main
+        let visible = screen?.visibleFrame ?? NSRect(origin: cursor.origin, size: size)
 
-        let view = CandidateView()
-        view.onClick = { [weak self] index in self?.onSelect?(index) }
-        panel.contentView = view
-        self.panel = panel
-        self.view = view
+        let belowY = cursor.minY - gap - size.height
+        let aboveY = cursor.maxY + gap
+        let fitsBelow = belowY >= visible.minY
+        let fitsAbove = aboveY + size.height <= visible.maxY
+        var y: CGFloat
+        switch position {
+        case .below: y = fitsBelow || !fitsAbove ? belowY : aboveY
+        case .above: y = fitsAbove || !fitsBelow ? aboveY : belowY
+        }
+        let x = min(max(cursor.minX, visible.minX), visible.maxX - size.width)
+        y = min(max(y, visible.minY), visible.maxY - size.height)
+        return NSRect(origin: NSPoint(x: x, y: y), size: size)
     }
 }
 
-// MARK: - CandidateView
+/// Never becomes key or main: typing stays in the app.
+private final class ListPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
 
-private final class CandidateView: NSView {
+/// Draws the typed text and up to nine candidates, as a column or a row, and handles clicks.
+private final class CandidateListView: NSView {
+    var onSelect: ((Int) -> Void)?
+
+    /// At most this many candidates show at once; the list scrolls to keep the selection in view.
+    private static let pageSize = 9
+    private static let padding: CGFloat = 6
+    private static let cellPadding = NSSize(width: 8, height: 3)
+    private static let cornerRadius: CGFloat = 8
+    private static let wordFont = NSFont.systemFont(ofSize: 16)
+    private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    private static let auxiliaryFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+
     private var candidates: [String] = []
     private var auxiliary = ""
     private var selected = 0
-    private var direction = PopupDirection.vertical
-    /// First candidate shown when there are more than fit.
-    private var offset = 0
+    private var horizontal = false
+    /// Index of the first candidate shown.
+    private var first = 0
+    /// Candidate under a mouse press that hasn't been released yet.
+    private var pressed: Int?
 
-    var onClick: ((Int) -> Void)?
+    /// Laid out by `update`: each shown candidate's index and frame (flipped coordinates).
+    private var cells: [(index: Int, frame: NSRect)] = []
+    private var auxiliaryFrame = NSRect.zero
+    private var moreFrame = NSRect.zero
+    private var contentSize = NSSize.zero
 
-    private let maxVisible = 9
-    private let padding: CGFloat = 6
-    private let auxHeight: CGFloat = 18
-    private let numberWidth: CGFloat = 18
-    private let font = NSFont.systemFont(ofSize: 16)
-    private let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-    private var rowHeight: CGFloat { ceil(font.pointSize * 1.6) }
+    override var isFlipped: Bool { true }
+    override var fittingSize: NSSize { contentSize }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    private var visible: Range<Int> { offset..<min(offset + maxVisible, candidates.count) }
-
-    func update(candidates: [String], auxiliary: String, selected: Int, direction: PopupDirection) {
+    func update(candidates: [String], auxiliary: String, selected: Int, horizontal: Bool) {
+        if candidates != self.candidates { first = 0 }
         self.candidates = candidates
         self.auxiliary = auxiliary
-        self.direction = direction
-        self.selected = candidates.isEmpty ? 0 : min(selected, candidates.count - 1)
-        // Keep the selection on screen.
-        if self.selected < offset { offset = self.selected }
-        if self.selected >= offset + maxVisible { offset = self.selected - maxVisible + 1 }
-        offset = max(0, min(offset, max(0, candidates.count - maxVisible)))
+        self.selected = min(max(selected, 0), candidates.count - 1)
+        self.horizontal = horizontal
+        pressed = nil
+
+        // Scroll just enough to show the selection.
+        if self.selected < first { first = self.selected }
+        if self.selected >= first + Self.pageSize { first = self.selected - Self.pageSize + 1 }
+        first = max(0, min(first, candidates.count - Self.pageSize))
+        arrange()
+    }
+
+    func cancelPress() {
+        guard pressed != nil else { return }
+        pressed = nil
         needsDisplay = true
     }
 
-    private func textWidth(_ text: String) -> CGFloat {
-        ceil((text as NSString).size(withAttributes: [.font: font]).width)
+    // MARK: Layout
+
+    private var shown: Range<Int> {
+        first..<min(first + Self.pageSize, candidates.count)
     }
 
-    /// Cell rects in view coordinates, one per visible candidate.
-    private func cells() -> [(index: Int, rect: NSRect)] {
-        let top = bounds.height - padding - auxHeight
-        switch direction {
-        case .vertical:
-            return visible.enumerated().map { i, index in
-                (index, NSRect(x: padding, y: top - CGFloat(i + 1) * rowHeight,
-                               width: bounds.width - padding * 2, height: rowHeight))
-            }
-        case .horizontal:
+    /// Where more candidates exist beyond those shown, as a small arrow.
+    private var moreSign: String? {
+        let before = first > 0, after = shown.upperBound < candidates.count
+        switch (before, after) {
+        case (false, false): return nil
+        case (true, true): return horizontal ? "◂▸" : "▴▾"
+        case (true, false): return horizontal ? "◂" : "▴"
+        case (false, true): return horizontal ? "▸" : "▾"
+        }
+    }
+
+    private func arrange() {
+        let padding = Self.padding
+        let auxiliarySize = text(auxiliary.isEmpty ? " " : auxiliary, font: Self.auxiliaryFont, color: .secondaryLabelColor).size()
+        let moreSize = moreSign.map { text($0, font: Self.auxiliaryFont, color: .tertiaryLabelColor).size() } ?? .zero
+        auxiliaryFrame = NSRect(x: padding + Self.cellPadding.width, y: padding,
+                                width: ceil(auxiliarySize.width), height: ceil(auxiliarySize.height))
+
+        let sizes = shown.map { cellSize(for: $0) }
+        let rowHeight = sizes.map(\.height).max() ?? 0
+        var cells: [(index: Int, frame: NSRect)] = []
+        let top = auxiliaryFrame.maxY + 2
+        var width: CGFloat = 0, height: CGFloat = 0
+        if horizontal {
             var x = padding
-            return visible.map { index in
-                let width = numberWidth + textWidth(candidates[index]) + 12
-                defer { x += width + 2 }
-                return (index, NSRect(x: x, y: top - rowHeight, width: width, height: rowHeight))
+            for (index, size) in zip(shown, sizes) {
+                cells.append((index, NSRect(x: x, y: top, width: size.width, height: rowHeight)))
+                x += size.width + 2
             }
+            width = x - 2 + padding
+            height = top + rowHeight + padding
+        } else {
+            let columnWidth = sizes.map(\.width).max() ?? 0
+            var y = top
+            for index in shown {
+                cells.append((index, NSRect(x: padding, y: y, width: columnWidth, height: rowHeight)))
+                y += rowHeight
+            }
+            width = columnWidth + 2 * padding
+            height = y + padding
         }
+
+        // The typed text and the "more" sign share the top line.
+        let topLine = auxiliaryFrame.maxX + (moreSize.width > 0 ? 12 + ceil(moreSize.width) : 0) + Self.cellPadding.width + padding
+        width = max(width, topLine, 60)
+        moreFrame = NSRect(x: width - padding - Self.cellPadding.width - ceil(moreSize.width), y: padding,
+                           width: ceil(moreSize.width), height: ceil(moreSize.height))
+        if !horizontal {
+            cells = cells.map { ($0.index, NSRect(x: $0.frame.minX, y: $0.frame.minY,
+                                                  width: width - 2 * padding, height: $0.frame.height)) }
+        }
+        self.cells = cells
+        contentSize = NSSize(width: ceil(width), height: ceil(height))
+        setFrameSize(contentSize)
     }
 
-    func idealSize() -> NSSize {
-        let height = padding * 2 + auxHeight + (direction == .vertical ? CGFloat(visible.count) : 1) * rowHeight
-        let auxWidth = ceil((auxiliary as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 11)]).width)
-        let contentWidth: CGFloat
-        switch direction {
-        case .vertical:
-            contentWidth = (visible.map { textWidth(candidates[$0]) }.max() ?? 0) + numberWidth + 32
-        case .horizontal:
-            contentWidth = visible.reduce(0) { $0 + numberWidth + textWidth(candidates[$1]) + 14 } + 12
-        }
-        return NSSize(width: max(160, contentWidth, auxWidth + 24) + padding * 2, height: height)
+    private func cellSize(for index: Int) -> NSSize {
+        let number = numberText(index, highlighted: false).size()
+        let word = text(candidates[index], font: Self.wordFont, color: .labelColor).size()
+        return NSSize(width: ceil(number.width + 4 + word.width + 2 * Self.cellPadding.width),
+                      height: ceil(max(number.height, word.height) + 2 * Self.cellPadding.height))
     }
+
+    // MARK: Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        let background = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
+        let background = NSBezierPath(roundedRect: bounds, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
         NSColor.windowBackgroundColor.setFill()
         background.fill()
         NSColor.separatorColor.setStroke()
-        background.lineWidth = 0.5
-        background.stroke()
+        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                                  xRadius: Self.cornerRadius - 0.5, yRadius: Self.cornerRadius - 0.5)
+        border.lineWidth = 1
+        border.stroke()
 
-        // What was typed, above the list.
-        (auxiliary as NSString).draw(
-            in: NSRect(x: padding + 4, y: bounds.height - padding - auxHeight,
-                       width: bounds.width - padding * 2 - 24, height: auxHeight),
-            withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]
-        )
-        // More candidates than fit.
-        if candidates.count > maxVisible {
-            let more = offset > 0 && visible.upperBound < candidates.count ? "↕" : offset > 0 ? "↑" : "↓"
-            (more as NSString).draw(
-                at: NSPoint(x: bounds.width - padding - 14, y: bounds.height - padding - auxHeight + 2),
-                withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.tertiaryLabelColor]
-            )
+        text(auxiliary, font: Self.auxiliaryFont, color: .secondaryLabelColor).draw(at: auxiliaryFrame.origin)
+        if let moreSign {
+            text(moreSign, font: Self.auxiliaryFont, color: .tertiaryLabelColor).draw(at: moreFrame.origin)
         }
 
-        for (index, rect) in cells() {
-            let isSelected = index == selected
-            if isSelected {
+        let highlightedIndex = pressed ?? selected
+        for (index, frame) in cells {
+            let highlighted = index == highlightedIndex
+            if highlighted {
                 NSColor.selectedContentBackgroundColor.setFill()
-                NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+                NSBezierPath(roundedRect: frame, xRadius: 5, yRadius: 5).fill()
             }
-            let textColor = isSelected ? NSColor.alternateSelectedControlTextColor : NSColor.labelColor
-            let numberColor = isSelected ? NSColor.alternateSelectedControlTextColor : NSColor.tertiaryLabelColor
-
-            let numberY = rect.minY + (rect.height - numberFont.pointSize) / 2 - 2
-            ("\(index + 1)" as NSString).draw(
-                at: NSPoint(x: rect.minX + 5, y: numberY),
-                withAttributes: [.font: numberFont, .foregroundColor: numberColor]
-            )
-            let textY = rect.minY + (rect.height - font.pointSize) / 2 - 3
-            (candidates[index] as NSString).draw(
-                at: NSPoint(x: rect.minX + numberWidth + 4, y: textY),
-                withAttributes: [.font: font, .foregroundColor: textColor]
-            )
+            let number = numberText(index, highlighted: highlighted)
+            let word = text(candidates[index], font: Self.wordFont,
+                            color: highlighted ? .alternateSelectedControlTextColor : .labelColor)
+            let wordSize = word.size(), numberSize = number.size()
+            let x = frame.minX + Self.cellPadding.width
+            number.draw(at: NSPoint(x: x, y: frame.midY - numberSize.height / 2 + 1))
+            word.draw(at: NSPoint(x: x + ceil(numberSize.width) + 4, y: frame.midY - wordSize.height / 2))
         }
+    }
+
+    private func numberText(_ index: Int, highlighted: Bool) -> NSAttributedString {
+        text("\(index + 1)", font: Self.numberFont,
+             color: highlighted ? .alternateSelectedControlTextColor : .secondaryLabelColor)
+    }
+
+    private func text(_ string: String, font: NSFont, color: NSColor) -> NSAttributedString {
+        NSAttributedString(string: string, attributes: [.font: font, .foregroundColor: color])
     }
 
     // MARK: Mouse
 
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    private func candidate(at event: NSEvent) -> Int? {
+        let point = convert(event.locationInWindow, from: nil)
+        return cells.first { $0.frame.contains(point) }?.index
+    }
 
     override func mouseDown(with event: NSEvent) {
-        guard let index = candidateIndex(at: convert(event.locationInWindow, from: nil)) else { return }
-        selected = index
+        pressed = candidate(at: event)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
-        if let index = candidateIndex(at: convert(event.locationInWindow, from: nil)), index == selected {
-            onClick?(index)
+        let released = candidate(at: event)
+        let wasPressed = pressed
+        pressed = nil
+        needsDisplay = true
+        if let released, released == wasPressed {
+            onSelect?(released)
         }
-    }
-
-    private func candidateIndex(at point: NSPoint) -> Int? {
-        cells().first { $0.rect.contains(point) }?.index
     }
 }

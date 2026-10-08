@@ -25,7 +25,7 @@ Developer ID সাইন ছাড়া পুরনো ভার্সন থ
 মুছে ফেলতে: Input Sources থেকে নুকতা বাংলা সরান, তারপর Finder-এ
 Go → Go to Folder… → /Library/Input Methods খুলে NuktaBangla.app Trash-এ ফেলুন।
 
-লাইসেন্স: ফোনেটিক টাইপিং OpenBangla-র riti ইঞ্জিন আর Lekho-র কোড দিয়ে তৈরি
-(Mozilla Public License 2.0)। সেই অংশের সোর্স কোড ও সব লাইসেন্স অ্যাপের ভেতরে আছে:
+লাইসেন্স: ফোনেটিক টাইপিংয়ে OpenBangla-র riti ইঞ্জিন ব্যবহার করা হয়েছে
+(Mozilla Public License 2.0)। riti-র সোর্স কোড ও সব লাইসেন্স অ্যাপের ভেতরে আছে:
 /Library/Input Methods/NuktaBangla.app/Contents/Resources/Licenses
-মূল সোর্স: https://github.com/OpenBangla/riti · https://github.com/ARahim3/Lekho
+মূল সোর্স: https://github.com/OpenBangla/riti

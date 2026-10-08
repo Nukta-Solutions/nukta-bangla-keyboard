@@ -1,202 +1,144 @@
-// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of
-// the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Adapted from Lekho (https://github.com/ARahim3/Lekho), Lekho/Sources/Engine.swift.
-
-import CRiti
 import Foundation
+import CRiti
 
-/// How phonetic typing behaves.
+/// How phonetic typing picks the word that Space commits.
 public enum TypingMode: String, CaseIterable {
-    /// The literal transliteration of your spelling is listed first and committed by default;
-    /// dictionary suggestions are one key away, and a word you pick over it is remembered.
+    /// What was typed, transliterated; a word picked from the list instead is preferred next time.
     case phoneticFirst
-    /// Dictionary, autocorrect and remembered picks choose the committed word.
+    /// riti's own choice: dictionary, autocorrect and past picks.
     case smart
-    /// Transliteration only: no suggestions, no popup.
+    /// Transliteration only, no list.
     case phoneticOnly
 }
 
+/// The settings phonetic typing depends on.
 public struct PhoneticOptions: Equatable {
     public var mode: TypingMode = .phoneticFirst
     public var autocorrect = true
     public var emoji = true
-    /// List the typed roman word itself as a candidate.
+    /// List the typed roman word itself.
     public var englishWord = true
-    /// `:` types ঃ as in Avro. Off: it types a colon, and words with ঃ come from the list
-    /// (`dukho` → দুঃখ).
+    /// False: ":" types a colon. True: it types ঃ, as in Avro.
     public var colonIsBisarga = false
 
     public init() {}
 }
 
-/// One riti suggestion, copied out of riti's memory.
-struct RitiSuggestion {
-    /// riti's Single variant: one transliteration and no list (phonetic-only, punctuation…).
-    var lonely: String?
-    var candidates: [String] = []
-    /// What was typed (shown above the list).
-    var auxiliary = ""
-    /// riti's remembered pick for this word, or the selection it preserved after punctuation.
-    var previouslySelected = 0
-
-    var isEmpty: Bool { lonely == nil && candidates.isEmpty }
+/// One riti answer, copied out of riti so nothing points into its memory afterwards.
+enum RitiSuggestion: Equatable {
+    case empty
+    /// A single string and no list: phonetic-only mode, or a lone punctuation mark.
+    case lonely(String)
+    /// `selection`: riti's default pick (a past choice, or the selection passed in for punctuation).
+    case list([String], auxiliary: String, selection: Int)
 }
 
-/// The riti contexts. One per process: riti contexts are large, and each rewrites riti's
-/// learned-selections file from its own copy, so several would overwrite each other.
-final class Riti {
-    private(set) var options: PhoneticOptions
-    let userDirectory: URL
+/// A riti context for Avro Phonetic, behind a Swift interface. Internal to this module.
+///
+/// riti panics (and so aborts the whole input method) on misuse, so every C call is made the way
+/// riti expects: lonely suggestions are never asked for list details, and everything riti hands
+/// out is freed here.
+final class RitiContext {
+    /// riti's learned picks and the user's autocorrect entries, inside the user directory.
+    static let userFiles = ["phonetic-candidate-selection.json", "autocorrect.json"]
 
-    private var main: OpaquePointer?
-    private var mainConfig: OpaquePointer?
-    /// Phonetic-first only: a suggestion-free context fed the same keys, whose output is the
-    /// literal transliteration of the word.
-    private var shadow: OpaquePointer?
-    private var shadowConfig: OpaquePointer?
+    private let context: OpaquePointer
 
-    /// The literal transliteration of the word in progress (phonetic-first only).
-    private(set) var literal: String?
-
-    init(options: PhoneticOptions, userDirectory: URL) {
-        self.options = options
-        self.userDirectory = userDirectory
-        build()
+    /// `directory` must exist; riti reads and writes its user files there.
+    /// `suggestions` false gives lonely transliterations only.
+    init(directory: URL, suggestions: Bool, englishWord: Bool, autocorrect: Bool) {
+        Self.setAsideBadFiles(in: directory)
+        let config = riti_config_new()!
+        defer { riti_config_free(config) }
+        _ = "avro_phonetic".withCString { riti_config_set_layout_file(config, $0) }
+        _ = directory.path.withCString { riti_config_set_user_dir(config, $0) }
+        riti_config_set_phonetic_suggestion(config, suggestions)
+        riti_config_set_suggestion_include_english(config, englishWord)
+        riti_config_set_autocorrect(config, autocorrect)
+        // The context keeps its own copy of the config.
+        context = riti_context_new_with_config(config)
     }
 
-    deinit { teardown() }
-
-    func rebuild(options: PhoneticOptions) {
-        teardown()
-        self.options = options
-        build()
+    deinit {
+        riti_context_free(context)
     }
 
-    var hasSession: Bool {
-        main.map { riti_context_ongoing_input_session($0) } ?? false
+    /// Feeds one key. `selection` is the riti index of the entry the user has selected; riti keeps
+    /// it as the default when the key is a punctuation mark.
+    func key(_ code: UInt16, shift: Bool, selection: Int = 0) -> RitiSuggestion {
+        let modifier = shift ? UInt8(MODIFIER_SHIFT) : 0
+        let index = UInt8(clamping: max(selection, 0))
+        return Self.take(riti_get_suggestion_for_key(context, code, modifier, index))
     }
 
+    /// Deletes the last letter, or the whole word. An empty result means the word is gone.
+    func backspace(wholeWord: Bool) -> RitiSuggestion {
+        Self.take(riti_context_backspace_event(context, wholeWord))
+    }
+
+    var isComposing: Bool {
+        riti_context_ongoing_input_session(context)
+    }
+
+    /// Ends the word, letting riti learn that `index` was picked.
+    func committed(index: Int) {
+        riti_context_candidate_committed(context, UInt(max(index, 0)))
+    }
+
+    /// Ends the word without telling riti what was picked.
+    func finish() {
+        riti_context_finish_input_session(context)
+    }
+
+    /// riti's keycode for a character on a US layout, or nil if riti has no key for it.
     static func keycode(for character: Character) -> UInt16? {
-        guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1 else { return nil }
+        guard character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first else { return nil }
         let code = nukta_riti_keycode(scalar.value)
         return code == 0 ? nil : code
     }
 
-    /// `selection`: the riti index currently selected; riti keeps it if the key is punctuation.
-    func feed(_ key: UInt16, shift: Bool, selection: Int) -> RitiSuggestion {
-        let modifier = shift ? UInt8(MODIFIER_SHIFT) : 0
-        let result = Self.take(riti_get_suggestion_for_key(main, key, modifier, UInt8(clamping: selection)))
-        if let shadow {
-            literal = Self.take(riti_get_suggestion_for_key(shadow, key, modifier, 0)).lonely
-        }
-        syncShadow()
-        return result
-    }
+    // MARK: Helpers
 
-    func backspace(wholeWord: Bool) -> RitiSuggestion {
-        let result = Self.take(riti_context_backspace_event(main, wholeWord))
-        if let shadow {
-            literal = Self.take(riti_context_backspace_event(shadow, wholeWord)).lonely
-        }
-        syncShadow()
-        return result
-    }
-
-    /// Ends the session after the candidate at riti index `index` was committed. Only smart mode
-    /// lets riti learn the pick; phonetic-first keeps its own memory (`PhoneticFirstPicks`),
-    /// because riti can't learn a pick of its index 0.
-    func committed(index: Int) {
-        if options.mode == .smart, let main {
-            riti_context_candidate_committed(main, UInt(index))
-        }
-        finish()
-    }
-
-    /// Ends any session in both contexts.
-    func finish() {
-        for ctx in [main, shadow].compactMap({ $0 }) where riti_context_ongoing_input_session(ctx) {
-            riti_context_finish_input_session(ctx)
-        }
-        literal = nil
-    }
-
-    /// The shadow must never outlive the main session.
-    private func syncShadow() {
-        guard !hasSession else { return }
-        if let shadow, riti_context_ongoing_input_session(shadow) {
-            riti_context_finish_input_session(shadow)
-        }
-        literal = nil
-    }
-
-    /// Copies a suggestion into Swift and frees it.
+    /// Copies a suggestion into Swift values and frees it.
     private static func take(_ pointer: OpaquePointer?) -> RitiSuggestion {
-        guard let pointer else { return RitiSuggestion() }
+        guard let pointer else { return .empty }
         defer { riti_suggestion_free(pointer) }
-        guard !riti_suggestion_is_empty(pointer) else { return RitiSuggestion() }
-
-        // riti's length, auxiliary text and previous-selection calls panic on a lonely
-        // suggestion: never make them on one.
+        if riti_suggestion_is_empty(pointer) { return .empty }
         if riti_suggestion_is_lonely(pointer) {
-            return RitiSuggestion(lonely: string(riti_suggestion_get_lonely_suggestion(pointer)))
+            return .lonely(string(riti_suggestion_get_lonely_suggestion(pointer)))
         }
-        var suggestion = RitiSuggestion()
-        for i in 0..<riti_suggestion_get_length(pointer) {
-            suggestion.candidates.append(string(riti_suggestion_get_suggestion(pointer, i)))
-        }
-        suggestion.auxiliary = string(riti_suggestion_get_auxiliary_text(pointer))
-        suggestion.previouslySelected = Int(riti_suggestion_previously_selected_index(pointer))
-        return suggestion
+        let count = riti_suggestion_get_length(pointer)
+        let entries = (0..<count).map { string(riti_suggestion_get_suggestion(pointer, $0)) }
+        let auxiliary = string(riti_suggestion_get_auxiliary_text(pointer))
+        let selection = Int(riti_suggestion_previously_selected_index(pointer))
+        return .list(entries, auxiliary: auxiliary, selection: selection)
     }
 
+    /// Copies a string riti returned and frees it.
     private static func string(_ pointer: UnsafeMutablePointer<CChar>?) -> String {
         guard let pointer else { return "" }
         defer { riti_string_free(pointer) }
         return String(cString: pointer)
     }
 
-    // MARK: Build / teardown
-
-    private func build() {
-        // riti aborts on a JSON file it can't parse; move bad ones aside first.
-        Self.quarantineIfCorrupt(userDirectory.appendingPathComponent("phonetic-candidate-selection.json"))
-        Self.quarantineIfCorrupt(userDirectory.appendingPathComponent("autocorrect.json"))
-
-        mainConfig = makeConfig(suggestions: options.mode != .phoneticOnly)
-        main = riti_context_new_with_config(mainConfig)
-        if options.mode == .phoneticFirst {
-            shadowConfig = makeConfig(suggestions: false)
-            shadow = riti_context_new_with_config(shadowConfig)
+    /// riti aborts the process if a user file isn't a flat JSON object of strings. A file like that
+    /// (half-written, edited by hand) is renamed, not deleted, so nothing the user made is lost.
+    private static func setAsideBadFiles(in directory: URL) {
+        let fileManager = FileManager.default
+        for name in userFiles {
+            let file = directory.appendingPathComponent(name)
+            guard fileManager.fileExists(atPath: file.path), !isFlatStringObject(file) else { continue }
+            let stamp = Int(Date().timeIntervalSince1970)
+            let aside = directory.appendingPathComponent("\(name).bad-\(stamp)")
+            try? fileManager.moveItem(at: file, to: aside)
         }
     }
 
-    private func teardown() {
-        finish()
-        if let main { riti_context_free(main) }
-        if let mainConfig { riti_config_free(mainConfig) }
-        if let shadow { riti_context_free(shadow) }
-        if let shadowConfig { riti_config_free(shadowConfig) }
-        main = nil; mainConfig = nil; shadow = nil; shadowConfig = nil
-    }
-
-    /// riti carries its dictionary, autocorrect, suffix and emoji data inside the library, so it
-    /// only needs a writable user directory.
-    private func makeConfig(suggestions: Bool) -> OpaquePointer? {
-        let config = riti_config_new()
-        _ = riti_config_set_layout_file(config, "avro_phonetic")
-        _ = riti_config_set_user_dir(config, userDirectory.path)
-        riti_config_set_phonetic_suggestion(config, suggestions)
-        riti_config_set_suggestion_include_english(config, options.englishWord)
-        riti_config_set_autocorrect(config, options.autocorrect)
-        return config
-    }
-
-    /// riti expects a flat `{string: string}` object; anything else is renamed, not deleted.
-    private static func quarantineIfCorrupt(_ url: URL) {
-        guard let data = FileManager.default.contents(atPath: url.path) else { return }
-        if (try? JSONSerialization.jsonObject(with: data)) is [String: String] { return }
-        let aside = url.path + ".corrupt-\(Int(Date().timeIntervalSince1970))"
-        try? FileManager.default.moveItem(atPath: url.path, toPath: aside)
+    private static func isFlatStringObject(_ file: URL) -> Bool {
+        guard let data = try? Data(contentsOf: file),
+              // riti's JSON reader rejects a byte order mark.
+              !data.starts(with: [0xEF, 0xBB, 0xBF]),
+              let object = try? JSONSerialization.jsonObject(with: data) else { return false }
+        return object is [String: String]
     }
 }

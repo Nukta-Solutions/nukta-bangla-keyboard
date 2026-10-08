@@ -40,19 +40,21 @@ fi
 DATADIR="${DESTDIR:-}$PREFIX/share"
 LIBDIR="$DATADIR/ibus-nukta-bangla"
 COMPONENTDIR="$DATADIR/ibus/component"
-VERSION=$(python3 -c 'import nukta_bangla; print(nukta_bangla.__version__)')
+# Read without Python: on a minimal system python3 is one of the dependencies installed below.
+VERSION=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' nukta_bangla/__init__.py)
 
 # --- dependencies: IBus itself, its Python bindings, and a Bangla font ------------------------
 # Package names differ per distro; the font package is a best effort and never fatal.
 case "$(. /etc/os-release 2>/dev/null && echo "${ID_LIKE:-${ID:-}}")" in
-    *debian*|*ubuntu*) MANAGER=(apt-get install -y); PKG_IBUS=ibus; PKG_GI=python3-gi; PKG_FONT=fonts-beng ;;
-    *fedora*|*rhel*)   MANAGER=(dnf install -y);     PKG_IBUS=ibus; PKG_GI=python3-gobject; PKG_FONT=google-noto-sans-bengali-fonts ;;
-    *arch*)            MANAGER=(pacman -S --needed --noconfirm); PKG_IBUS=ibus; PKG_GI=python-gobject; PKG_FONT=noto-fonts ;;
-    *suse*)            MANAGER=(zypper install -y); PKG_IBUS=ibus; PKG_GI=python3-gobject; PKG_FONT=noto-sans-bengali-fonts ;;
+    *debian*|*ubuntu*) MANAGER=(apt-get install -y); PKG_PY=python3; PKG_IBUS=ibus; PKG_GI=python3-gi; PKG_FONT=fonts-beng ;;
+    *fedora*|*rhel*)   MANAGER=(dnf install -y);     PKG_PY=python3; PKG_IBUS=ibus; PKG_GI=python3-gobject; PKG_FONT=google-noto-sans-bengali-fonts ;;
+    *arch*)            MANAGER=(pacman -S --needed --noconfirm); PKG_PY=python; PKG_IBUS=ibus; PKG_GI=python-gobject; PKG_FONT=noto-fonts ;;
+    *suse*)            MANAGER=(zypper install -y); PKG_PY=python3; PKG_IBUS=ibus; PKG_GI=python3-gobject; PKG_FONT=noto-sans-bengali-fonts ;;
     *)                 MANAGER=() ;;
 esac
 
 MISSING=()
+command -v python3 >/dev/null || MISSING+=("${PKG_PY:-python3}")
 command -v ibus >/dev/null || MISSING+=("${PKG_IBUS:-ibus}")
 python3 -c 'import gi; gi.require_version("IBus", "1.0"); from gi.repository import IBus' 2>/dev/null \
     || MISSING+=("${PKG_GI:-python3-gi}")
@@ -69,6 +71,8 @@ install_deps() {
     fi
     local prefix=()
     [[ $(id -u) -ne 0 ]] && prefix=(sudo)
+    # apt can't find packages until its lists are fetched (a new system) or refreshed (an old one).
+    [[ ${MANAGER[0]} == apt-get ]] && { "${prefix[@]}" apt-get update -qq || true; }
     echo "+ ${prefix[*]} ${MANAGER[*]} ${MISSING[*]}"
     "${prefix[@]}" "${MANAGER[@]}" "${MISSING[@]}"
 }
@@ -93,6 +97,8 @@ if (( ${#MISSING[@]} )); then
         echo "Warning: missing ${MISSING[*]} — install with: $(deps_command)" >&2
     fi
 fi
+
+command -v python3 >/dev/null || { echo "নুকতা বাংলা needs Python 3: install python3, then run this again." >&2; exit 1; }
 
 # The layout logic is the same corpus the macOS engine is tested against: never install a build
 # that types differently.

@@ -253,14 +253,14 @@ fi
 cat <<'MSG'
 
 Then add the keyboard:
-  GNOME  Settings → Keyboard → Input Sources → + → Bangla → নুকতা বাংলা
+  GNOME  Settings → Keyboard → Input Sources → + → Bangla → নুকতা বাংলা - বিজয়
   KDE    System Settings → Keyboard → Virtual Keyboard / Input Method → IBus → add Bangla - নুকতা বাংলা
-  Any    ibus-setup → Input Method → Add → Bangla → নুকতা বাংলা
+  Any    ibus-setup → Input Method → Add → Bangla → নুকতা বাংলা - বিজয়
 
-Both layouts are listed under Bangla: **নুকতা বাংলা** (Bijoy) and **নুকতা বাংলা ফোনেটিক**
-(phonetic). Add either or both; Super+Space switches between whatever you added, and each
-layout's own menu can switch to the other. Phonetic settings live in
-~/.config/nukta-bangla/settings.json (linux/README.md lists them).
+Both layouts are listed under Bangla: **নুকতা বাংলা - বিজয়** and **নুকতা বাংলা - ফোনেটিক**.
+Add either or both; Super+Space switches between whatever you added, and each layout's own menu
+can switch to the other. Phonetic settings live in ~/.config/nukta-bangla/settings.json
+(linux/README.md lists them).
 
 If an engine is not listed, run `ibus restart` (or log out and back in). Run ./install.sh again
 after any code change.

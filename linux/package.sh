@@ -92,6 +92,6 @@ Send the .sh file. On the other machine, one line installs it:
 
 It asks before installing IBus, the Python bindings and a Bangla font, then installs the engine and
 restarts IBus. The person still adds নুকতা বাংলা in their keyboard settings once (the installer
-prints how, per desktop) — both layouts are listed there, Bijoy and phonetic.
+prints how, per desktop) — both layouts are listed there: নুকতা বাংলা - বিজয় and - ফোনেটিক.
 MSG
 [[ $PHONETIC == yes ]] || echo "Built without phonetic typing (--no-phonetic): the package offers Bijoy only."

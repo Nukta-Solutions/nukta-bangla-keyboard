@@ -258,9 +258,10 @@ def run(standalone=False):
             "MIT", "Nukta Solutions",
             "https://github.com/Nukta-Solutions/nukta-bangla-keyboard", "", "nukta-bangla")
         for name, longname, description in (
-            ("nukta-bangla", "নুকতা বাংলা (Nukta Bangla)",
+            # The longnames are what desktops show; keep them the same as nukta-bangla.xml.in.
+            ("nukta-bangla", "নুকতা বাংলা - বিজয়",
              "Bijoy Bangla keyboard layout, Unicode output"),
-            ("nukta-bangla-phonetic", "নুকতা বাংলা ফোনেটিক (Nukta Bangla Phonetic)",
+            ("nukta-bangla-phonetic", "নুকতা বাংলা - ফোনেটিক",
              "Avro Phonetic: type Bangla with roman letters"),
         ):
             component.add_engine(IBus.EngineDesc.new(

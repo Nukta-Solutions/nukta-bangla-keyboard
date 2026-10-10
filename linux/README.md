@@ -3,10 +3,10 @@
 The same two layouts as the macOS input method, as [IBus](https://github.com/ibus/ibus) engines — so
 one keyboard works at the office (macOS) and at home (Linux):
 
-- **নুকতা বাংলা** — the Bijoy layout. Typing rules, including the Avro 4.5.1 double-press kars, are
+- **নুকতা বাংলা - বিজয়** — the Bijoy layout. Typing rules, including the Avro 4.5.1 double-press kars, are
   identical to the macOS build; the table in the
   [top-level README](../README.md#typing-avro-451-style-the-default) applies here unchanged.
-- **নুকতা বাংলা ফোনেটিক** — Avro-style phonetic typing with dictionary suggestions: `ami bangla
+- **নুকতা বাংলা - ফোনেটিক** — Avro-style phonetic typing with dictionary suggestions: `ami bangla
   likhchi` → আমি বাংলা লিখছি. Same engine (riti), same rules, same settings as the macOS
   [phonetic typing](../README.md#phonetic-typing).
 
@@ -46,12 +46,15 @@ It offers to build riti for phonetic typing (`--with-phonetic` to build without 
 `--no-phonetic` to skip it), runs the engine tests, installs into `/usr/share` (asking for sudo once)
 and restarts IBus. Then add the keyboard:
 
-- **GNOME**: Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা**
-- **KDE**: System Settings → Keyboard → Input Method → IBus → Add Input Method → Bangla → **নুকতা বাংলা**
-- **Any desktop**: `ibus-setup` → Input Method → Add → Bangla → **নুকতা বাংলা**
+- **GNOME**: Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা - বিজয়**
+- **KDE**: System Settings → Keyboard → Input Method → IBus → Add Input Method → Bangla → **নুকতা বাংলা - বিজয়**
+- **Any desktop**: `ibus-setup` → Input Method → Add → Bangla → **নুকতা বাংলা - বিজয়**
 
-Both layouts are listed under Bangla — **নুকতা বাংলা** and **নুকতা বাংলা ফোনেটিক**. Add either or
-both; **Super+Space** switches between whatever you added. If an engine is not listed, `ibus restart`,
+Both layouts are listed under Bangla — **নুকতা বাংলা - বিজয়** and **নুকতা বাংলা - ফোনেটিক**. Add
+either or both; **Super+Space** switches between whatever you added. Desktops write the language in
+front of the name themselves (GNOME shows "Bangla (নুকতা বাংলা - বিজয়)"), which is why the engines'
+names carry no romanisation of their own — searching the list for "nukta" will not find them, but
+"বাংলা" or "bangla" will. If an engine is not listed, `ibus restart`,
 or log out and back in. Run `linux/install.sh` again after any code change, and `linux/uninstall.sh`
 to remove it (what phonetic typing learned stays in `~/.local/share/nukta-bangla`).
 

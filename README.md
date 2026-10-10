@@ -25,8 +25,8 @@ or, without cloning it at all:
 ```
 curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboard/main/linux/bootstrap.sh | bash
 ```
-Then add it under Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা** (Bijoy) or
-**নুকতা বাংলা ফোনেটিক** (phonetic) — in GNOME, or with `ibus-setup` elsewhere — and switch with
+Then add it under Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা - বিজয়** or
+**নুকতা বাংলা - ফোনেটিক** — in GNOME, or with `ibus-setup` elsewhere — and switch with
 Super+Space. It needs IBus and `python3-gi`, and phonetic typing needs riti as a compiled library,
 which the self-extracting installer carries and `install.sh` offers to build from a clone.
 [linux/README.md](linux/README.md) has the per-distro packages, the phonetic settings file, the

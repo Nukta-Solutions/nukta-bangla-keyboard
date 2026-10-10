@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Installed as @COMPONENTDIR@/nukta-bangla.xml by install.sh, which fills in the paths.
+     An engine's <longname> is the name desktops show, after the language of <language>: GNOME
+     writes "Bangla (নুকতা বাংলা - বিজয়)" and formats that prefix itself, so the longname is the
+     name alone, with no bracketed romanisation to nest inside GNOME's own brackets.
      The phonetic engine between the markers needs riti (libnukta_riti.so); install.sh leaves the
      block out when that library is not there, so no one can pick a layout that cannot type. -->
 <component>
@@ -14,7 +17,7 @@
   <engines>
     <engine>
       <name>nukta-bangla</name>
-      <longname>নুকতা বাংলা (Nukta Bangla)</longname>
+      <longname>নুকতা বাংলা - বিজয়</longname>
       <description>Bijoy Bangla keyboard layout, Unicode output</description>
       <language>bn</language>
       <license>MIT</license>
@@ -27,7 +30,7 @@
     <!-- PHONETIC-BEGIN -->
     <engine>
       <name>nukta-bangla-phonetic</name>
-      <longname>নুকতা বাংলা ফোনেটিক (Nukta Bangla Phonetic)</longname>
+      <longname>নুকতা বাংলা - ফোনেটিক</longname>
       <description>Avro Phonetic: type Bangla with roman letters, pick from the suggestions</description>
       <language>bn</language>
       <license>MIT</license>

@@ -7,7 +7,9 @@ publish = false
 
 [lib]
 name = "nukta_riti"
-crate-type = ["staticlib"]
+# staticlib: the macOS app links it into the binary. cdylib: the Linux IBus engine is Python and
+# loads it at run time with ctypes (linux/nukta_bangla/riti.py).
+crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 # OpenBangla's phonetic engine, vendored at 9afef322d29807e7c93ff589e910b0794f3812ec with riti.patch

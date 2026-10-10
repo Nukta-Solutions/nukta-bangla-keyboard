@@ -3,9 +3,11 @@
 The classic Bijoy keyboard layout as a native input method with Unicode output: an InputMethodKit
 input method on macOS, an IBus engine on Linux. Same keys, same rules, same output on both.
 
-macOS adds Avro-style phonetic typing with dictionary suggestions. Pick the layout from the নু menu in
-the menu bar: **বিজয় লেআউট** or **ফোনেটিক**. The choice applies to every app and is remembered;
-**সেটিংস…** in the same menu has the rest. (Linux types Bijoy only — see [linux/README.md](linux/README.md).)
+Both platforms also do Avro-style phonetic typing with dictionary suggestions, from the same engine and
+with the same settings. On macOS, pick the layout from the নু menu in the menu bar: **বিজয় লেআউট** or
+**ফোনেটিক** — the choice applies to every app and is remembered, and **সেটিংস…** in the same menu has
+the rest. On Linux the two layouts are separate input sources, switched with Super+Space, and the
+settings are a small JSON file — see [linux/README.md](linux/README.md).
 
 ## Install on macOS
 ```
@@ -23,10 +25,12 @@ or, without cloning it at all:
 ```
 curl -fsSL https://raw.githubusercontent.com/Nukta-Solutions/nukta-bangla-keyboard/main/linux/bootstrap.sh | bash
 ```
-Then add it under Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা** (GNOME) or with
-`ibus-setup` elsewhere, and switch with Super+Space. It needs IBus and `python3-gi`;
-[linux/README.md](linux/README.md) has the per-distro packages, the non-GNOME desktop setup, the
-no-root install and how the Linux port works.
+Then add it under Settings → Keyboard → Input Sources → **+** → Bangla → **নুকতা বাংলা** (Bijoy) or
+**নুকতা বাংলা ফোনেটিক** (phonetic) — in GNOME, or with `ibus-setup` elsewhere — and switch with
+Super+Space. It needs IBus and `python3-gi`, and phonetic typing needs riti as a compiled library,
+which the self-extracting installer carries and `install.sh` offers to build from a clone.
+[linux/README.md](linux/README.md) has the per-distro packages, the phonetic settings file, the
+non-GNOME desktop setup, the no-root install and how the Linux port works.
 
 ## Typing (Avro 4.5.1 style: the default)
 Classic Bijoy order works as always. As in Avro, a pre-base kar (ি ে ৈ) **pressed twice** right after a
@@ -89,7 +93,11 @@ underlined in Bangla as you type, with a list of suggestions from a 150k-word di
 | `ng` `Ng` `NG` ``` t`` ``` `^` | ং ঙ ঞ ৎ ঁ |
 | `rr` before a consonant · `r` / `y` / `w` after one | reph (`dhorrmo` → ধর্ম) · ্র ্য ্ব (`prem` → প্রেম) |
 
-What it learns (picks, riti's selections) is kept in `~/Library/Application Support/Nukta Bangla`.
+What it learns (picks, riti's selections) is kept in `~/Library/Application Support/Nukta Bangla`
+(`~/.local/share/nukta-bangla` on Linux), in the same files, so a copied directory works on either.
+Linux has the same settings in `~/.config/nukta-bangla/settings.json`
+([linux/README.md](linux/README.md#phonetic-typing-and-its-settings)), and deletes the whole word
+with Ctrl+⌫ or Alt+⌫ rather than ⌥⌫.
 
 ### Where it comes from, and the licence
 Phonetic typing uses [riti](https://github.com/OpenBangla/riti), OpenBangla's engine (Rust), as a library.
@@ -103,6 +111,8 @@ riti is under the Mozilla Public License 2.0, which applies file by file:
 - `scripts/build.sh` puts the MPL source (`MPL-source.zip`), `MPL-2.0.txt` and the Rust crates' licences
   (`THIRD-PARTY-NOTICES.txt`, from `scripts/third_party_notices.sh`) in the app; the About panel and
   INSTALL.txt point there. Rerun `scripts/third_party_notices.sh` after changing `riti-bridge/Cargo.lock`.
+- On Linux the same notices and `riti-source.tar.gz` are installed beside `libnukta_riti.so`, in
+  `$PREFIX/share/ibus-nukta-bangla/licenses/`, by `linux/install.sh`.
 
 ## Sharing with friends
 ```
@@ -137,11 +147,13 @@ scripts/build.sh        # build/NuktaBangla.app (builds riti too)
 - `Sources/NuktaEngine`: Bijoy key map and reordering logic (no AppKit).
 - `Sources/NuktaPhonetic`: riti wrapper and `PhoneticComposer`, which turns keys into text to commit,
   marked text and the suggestion list (no AppKit, tested in `NuktaPhoneticTests`).
-- `riti-bridge`: the Rust static library, riti plus a keycode lookup. `Sources/CRiti` is its C module.
-- `linux/`: the Linux port — the Bijoy engine again in Python plus the IBus front end, needing no Swift
-  or Rust (`python3 -m unittest discover -s linux/tests`). The keystroke corpus in
-  `linux/tests/test_engine.py` mirrors `Tests/NuktaEngineTests/EngineTests.swift`: a new Bijoy typing
-  rule needs its case in both.
+- `riti-bridge`: the Rust library, riti plus a keycode lookup. Built as a static library for the macOS
+  app (`Sources/CRiti` is its C module) and as a shared one for Linux, which loads it from Python.
+- `linux/`: the Linux port — both engines again in Python plus their IBus front ends, needing no Swift
+  (`python3 -m unittest discover -s linux/tests`). The keystroke corpora in `linux/tests/test_engine.py`
+  and `linux/tests/test_phonetic.py` mirror `Tests/NuktaEngineTests/EngineTests.swift` and
+  `Tests/NuktaPhoneticTests/PhoneticComposerTests.swift`: a new typing rule needs its case in both
+  platforms' files. Only the phonetic half needs Rust, for `linux/build_riti.sh`.
 - `Sources/NuktaInputMethod`: the InputMethodKit layer. `Phonetic` holds the one composer and suggestion
   list the whole process shares; `SettingsWindow` and `Settings` (UserDefaults) are the settings.
   - `ClientWriter` puts text straight into the app and rewrites the last few characters to reorder them.

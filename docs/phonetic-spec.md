@@ -4,6 +4,15 @@ What the phonetic half of Nukta Bangla must do: the riti wrapper, the composer t
 the memory of picked words, the suggestion list window, and the riti keycode lookup. It describes behaviour
 and interfaces only; the code is written from this, the README and the tests.
 
+Sections 1–5 are implemented **twice**: in Swift for macOS (`Sources/NuktaPhonetic`) and in Python for the
+Linux IBus engine (`linux/nukta_bangla/riti.py`, `phonetic.py`), name for name. Both are tested against the
+same corpus — `Tests/NuktaPhoneticTests/PhoneticComposerTests.swift` and `linux/tests/test_phonetic.py` — so
+**a change here needs both implementations and both test files.** Sections 6 and 7 are macOS only: IBus draws
+the suggestion list and places it itself, so Linux needs no panel and no cursor rectangle. On Linux riti is
+the same Rust crate built as a shared library and called with `ctypes`, the settings live in a JSON file
+(`linux/nukta_bangla/settings.py`) rather than UserDefaults, and the whole word is deleted with Ctrl+⌫ or
+Alt+⌫ in place of ⌥⌫.
+
 Everything here is Nukta Solutions' own code under the repo's MIT licence. The one third-party part is riti
 (`riti-bridge/riti`, MPL-2.0), used as a library through its C API (`riti-bridge/riti/include/riti.h`).
 

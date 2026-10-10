@@ -19,4 +19,6 @@ if command -v ibus >/dev/null; then
     ibus write-cache >/dev/null 2>&1 || true
     ibus restart >/dev/null 2>&1 || true
 fi
-echo "Removed নুকতা বাংলা from $PREFIX. Remove the input source from your keyboard settings too."
+echo "Removed নুকতা বাংলা from $PREFIX (both layouts). Remove the input sources from your keyboard"
+echo "settings too. Your settings (~/.config/nukta-bangla) and what phonetic typing learned"
+echo "(~/.local/share/nukta-bangla) are left alone; delete those directories to clear them."

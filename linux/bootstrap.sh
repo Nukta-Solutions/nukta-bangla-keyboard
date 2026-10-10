@@ -6,6 +6,11 @@
 # Downloads the current source, checks it, and runs linux/install.sh. Arguments reach install.sh:
 #   … | bash -s -- --user        install into ~/.local, without root
 #   … | bash -s -- --with-deps   install IBus and the Python bindings without asking first
+#   … | bash -s -- --no-phonetic install the Bijoy layout only
+#
+# The source it downloads carries riti's source, so install.sh offers to build phonetic typing when
+# Rust is installed (https://rustup.rs). Without Rust it installs the Bijoy layout; a self-extracting
+# installer from Releases carries riti ready-built and needs no Rust at all.
 #
 # Overrides, for a fork or a tagged release:
 #   NUKTA_REPO=owner/name  NUKTA_REF=v1.0.1  NUKTA_URL=https://…/something.tar.gz

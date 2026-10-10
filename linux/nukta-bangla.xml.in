@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Installed as @COMPONENTDIR@/nukta-bangla.xml by install.sh, which fills in the paths. -->
+<!-- Installed as @COMPONENTDIR@/nukta-bangla.xml by install.sh, which fills in the paths.
+     The phonetic engine between the markers needs riti (libnukta_riti.so); install.sh leaves the
+     block out when that library is not there, so no one can pick a layout that cannot type. -->
 <component>
   <name>org.freedesktop.IBus.NuktaBangla</name>
-  <description>নুকতা বাংলা (Nukta Bangla) — Bijoy Bangla keyboard layout</description>
+  <description>নুকতা বাংলা (Nukta Bangla) — Bijoy and Avro Phonetic Bangla keyboard layouts</description>
   <exec>@EXEC@ --ibus</exec>
   <version>@VERSION@</version>
   <author>Nukta Solutions</author>
@@ -22,5 +24,19 @@
       <symbol>নু</symbol>
       <rank>99</rank>
     </engine>
+    <!-- PHONETIC-BEGIN -->
+    <engine>
+      <name>nukta-bangla-phonetic</name>
+      <longname>নুকতা বাংলা ফোনেটিক (Nukta Bangla Phonetic)</longname>
+      <description>Avro Phonetic: type Bangla with roman letters, pick from the suggestions</description>
+      <language>bn</language>
+      <license>MIT</license>
+      <author>Nukta Solutions</author>
+      <icon>@ICON@</icon>
+      <layout>us</layout>
+      <symbol>ফ</symbol>
+      <rank>98</rank>
+    </engine>
+    <!-- PHONETIC-END -->
   </engines>
 </component>

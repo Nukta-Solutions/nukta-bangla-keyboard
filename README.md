@@ -1,13 +1,16 @@
 # নুকতা বাংলা (Nukta Bangla)
 
 The classic Bijoy keyboard layout as a native input method with Unicode output: an InputMethodKit
-input method on macOS, an IBus engine on Linux. Same keys, same rules, same output on both.
+input method on macOS, an IBus engine on Linux, a TSF text service on Windows. Same keys, same rules,
+same output on all three.
 
-Both platforms also do Avro-style phonetic typing with dictionary suggestions, from the same engine and
+All three also do Avro-style phonetic typing with dictionary suggestions, from the same engine and
 with the same settings. On macOS, pick the layout from the নু menu in the menu bar: **বিজয় লেআউট** or
 **ফোনেটিক** — the choice applies to every app and is remembered, and **সেটিংস…** in the same menu has
 the rest. On Linux the two layouts are separate input sources, switched with Super+Space, and the
-settings are a small JSON file — see [linux/README.md](linux/README.md).
+settings are a small JSON file — see [linux/README.md](linux/README.md). On Windows both are in one
+keyboard: click the **বি** / **ফ** indicator in the taskbar to switch, right-click it for the menu — see
+[windows/README.md](windows/README.md).
 
 ## Install on macOS
 ```
@@ -31,6 +34,12 @@ Super+Space. It needs IBus and `python3-gi`, and phonetic typing needs riti as a
 which the self-extracting installer carries and `install.sh` offers to build from a clone.
 [linux/README.md](linux/README.md) has the per-distro packages, the phonetic settings file, the
 non-GNOME desktop setup, the no-root install and how the Linux port works.
+
+## Install on Windows
+Run `NuktaBangla-Setup-<version>.exe` (built by `windows\build.ps1`, or downloaded from the `Windows`
+GitHub workflow's run). It adds **নুকতা বাংলা** to your keyboards; switch to it with Win+Space.
+Windows 10 and 11, 64-bit and 32-bit. [windows/README.md](windows/README.md) has the details and how the
+Windows port works.
 
 ## Typing (Avro 4.5.1 style: the default)
 Classic Bijoy order works as always. As in Avro, a pre-base kar (ি ে ৈ) **pressed twice** right after a

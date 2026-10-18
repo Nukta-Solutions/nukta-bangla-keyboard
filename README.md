@@ -10,11 +10,21 @@ the rest. On Linux the two layouts are separate input sources, switched with Sup
 settings are a small JSON file — see [linux/README.md](linux/README.md).
 
 ## Install on macOS
+With [Homebrew](https://brew.sh):
+```
+brew install --cask nukta-solutions/tap/nukta-bangla
+```
+or download [NuktaBangla.dmg](https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/latest/download/NuktaBangla.dmg)
+and run the installer inside it. Either way, log out and back in, then go to System Settings → Keyboard →
+Input Sources → Edit… → + → Bangla → **নুকতা বাংলা**. `brew upgrade` picks up new versions;
+`brew uninstall --cask nukta-bangla` removes it (`--zap` also deletes its settings and learned words).
+
+From a clone, to try a change:
 ```
 scripts/install.sh
 ```
-Then go to System Settings → Keyboard → Input Sources → Edit… → + → Bangla → **নুকতা বাংলা**.
-Run `scripts/install.sh` again after any code change. It also removes the old BijoyBangla.app; remove the old
+It installs into `~/Library/Input Methods`; add the input source the same way, and run it again after any
+code change. It also removes the old BijoyBangla.app; remove the old
 Bijoy Bangla entry from Input Sources if it's still listed.
 
 ## Install on Linux
@@ -136,6 +146,46 @@ and the .dmg and staples their tickets, so it installs with no Gatekeeper warnin
   `xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id Y2466L4CFL`.
 
 `scripts/package.sh --no-notarize` makes a signed but un-notarized .pkg and .dmg for a quick test.
+
+## Releasing
+Pushing a `v*` tag runs [.github/workflows/release.yml](.github/workflows/release.yml):
+1. Checks the tag is `v` + `CFBundleShortVersionString` and that `linux/nukta_bangla/__init__.py`
+   says the same version, and creates a draft release (or uses one you made by hand with notes).
+2. On macOS, runs `scripts/package.sh` with the Developer ID certificates and a notarytool profile set
+   up from secrets, checks the DMG is signed, notarized and stapled, and uploads it as `NuktaBangla.dmg`.
+3. On Ubuntu 22.04, builds riti, runs the Linux tests and `linux/package.sh`, and uploads
+   `nukta-bangla-linux.sh`.
+4. Publishes the release once both are attached, then sets the version and sha256 in
+   [Nukta-Solutions/homebrew-tap](https://github.com/Nukta-Solutions/homebrew-tap)'s cask.
+
+If signing or notarization fails, the run fails and the release stays a draft with nothing public.
+
+```
+# bump CFBundleShortVersionString and CFBundleVersion in Resources/Info.plist, and
+# __version__ in linux/nukta_bangla/__init__.py, merge that to main, then:
+git switch main && git pull
+git tag v1.0.2 && git push origin v1.0.2
+gh run watch
+```
+
+Repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `DEVELOPER_ID_APPLICATION_P12` | base64 of a .p12 export of the Developer ID Application certificate *with its private key* |
+| `DEVELOPER_ID_APPLICATION_P12_PASSWORD` | the password set on that export |
+| `DEVELOPER_ID_INSTALLER_P12` | the same for the Developer ID Installer certificate |
+| `DEVELOPER_ID_INSTALLER_P12_PASSWORD` | its export password |
+| `APP_STORE_CONNECT_API_KEY_P8` | the contents of an App Store Connect API key (`AuthKey_XXXXXXXXXX.p8`) |
+| `APP_STORE_CONNECT_KEY_ID` | that key's ID (the `XXXXXXXXXX`) |
+| `APP_STORE_CONNECT_ISSUER_ID` | the Issuer ID shown above the keys list |
+| `HOMEBREW_TAP_TOKEN` | a fine-grained token with Contents: read and write on `Nukta-Solutions/homebrew-tap` only |
+
+To export a certificate: Keychain Access → login → My Certificates → right-click the certificate (it
+must show a key under it) → Export… → .p12, with a password. Then
+`base64 -i app.p12 | gh secret set DEVELOPER_ID_APPLICATION_P12` and delete the .p12. The API key comes from
+App Store Connect → Users and Access → Integrations → App Store Connect API → Team Keys → **+**, role
+Developer; it can be downloaded once. `gh secret set APP_STORE_CONNECT_API_KEY_P8 < AuthKey_XXXXXXXXXX.p8`.
 
 ## Development
 Needs Rust for riti: `curl https://sh.rustup.rs -sSf | sh` (once).

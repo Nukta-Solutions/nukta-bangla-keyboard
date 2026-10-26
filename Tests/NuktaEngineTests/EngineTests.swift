@@ -273,6 +273,23 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(next.display, "ব")
     }
 
+    /// অ (Shift+F) is on screen as soon as it is typed, not only after the next key; an f still
+    /// makes it আ.
+    func testAShowsAtOnce() {
+        var e = Engine()
+        var out = e.process(character: "F")!
+        XCTAssertEqual(out.committed, "")
+        XCTAssertEqual(out.visible, "অ")
+        out = e.process(character: "f")!
+        XCTAssertEqual(out.committed, "আ")
+        XCTAssertEqual(out.visible, "")
+        e = Engine()
+        _ = e.process(character: "F")
+        out = e.process(character: "j")!
+        XCTAssertEqual(out.committed, "অ")
+        XCTAssertEqual(out.visible, "ক")
+    }
+
     func testNonBijoyKeysReturnNil() {
         let e = Engine()
         XCTAssertNil(e.process(character: " "))

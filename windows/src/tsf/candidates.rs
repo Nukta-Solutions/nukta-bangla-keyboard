@@ -92,7 +92,16 @@ impl Fonts {
             dpi
         };
         let scale = if dpi > 0 { dpi * 100 / 96 } else { 100 };
-        Fonts { word: font(w!("Nirmala UI"), 21 * scale / 100), small: font(w!("Segoe UI"), 14 * scale / 100), scale }
+        // The words in the brand's Noto Serif Bengali, loaded for this app only from the install
+        // folder (`fonts\`, beside `x64\` and `x86\`); Nirmala UI if it isn't there.
+        let dll = super::register::dll_path();
+        let bundled = std::path::Path::new(&dll)
+            .parent()
+            .and_then(std::path::Path::parent)
+            .and_then(crate::win::bangla_font_in)
+            .is_some_and(|font| crate::win::load_bangla_font_for_gdi(&font));
+        let face = if bundled { w!("Noto Serif Bengali") } else { w!("Nirmala UI") };
+        Fonts { word: font(face, 21 * scale / 100), small: font(w!("Segoe UI"), 14 * scale / 100), scale }
     }
 
     fn px(&self, value: i32) -> i32 {

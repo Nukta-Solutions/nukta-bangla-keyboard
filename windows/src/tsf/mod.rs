@@ -3,13 +3,12 @@
 //!
 //! Windows loads this DLL into every app that takes text, on each thread that has a text-services
 //! thread manager, and creates one `TextService` there. It types with both layouts: which one is
-//! the shared `layout` setting, switched from the taskbar's input indicator (the counterpart of the
-//! macOS নু menu) and applied to every app.
+//! the shared `layout` setting, switched from the top bar and the tray icon (NuktaBangla.exe, the
+//! counterpart of the macOS নু menu) and applied to every app. F12 is caught here.
 //!
 //! - `service`: activation, keys, focus, and the two layouts.
 //! - `edit`: edit sessions, the only way TSF lets a text service change an app's text.
 //! - `candidates`: the phonetic suggestion list window.
-//! - `langbar`: the taskbar indicator and its menu.
 //! - `display_attribute`: the underline under the text being composed.
 //! - `keys`: physical key → US-layout character, as on macOS and Linux.
 //! - `register`: what `regsvr32` (the installer) writes and removes.
@@ -18,7 +17,6 @@ mod candidates;
 mod display_attribute;
 mod edit;
 mod keys;
-mod langbar;
 mod register;
 mod service;
 
@@ -41,8 +39,13 @@ pub const CLSID_TEXT_SERVICE: GUID = GUID::from_u128(0xCF0D8A77_8C0C_492E_A866_6
 pub const GUID_PROFILE: GUID = GUID::from_u128(0xC648CDA6_E335_491C_9AA9_CF777AEB20AE);
 /// The look of the text being composed (underlined).
 pub const GUID_DISPLAY_ATTRIBUTE: GUID = GUID::from_u128(0x6F0482DF_89E8_43FA_9381_9FBB933A886B);
-/// Bangla (Bangladesh).
-pub const LANGID_BANGLA: u16 = 0x0845;
+/// English (United States): the keyboard sits beside the user's English keyboard and replaces it,
+/// as Avro does. Its English mode passes keys through, so they type with the US layout under this
+/// language; Bangla is switched on from the floating bar or the tray, not with Win+Space.
+pub const LANGID_KEYBOARD: u16 = 0x0409;
+/// Bangla (Bangladesh), where versions before the floating bar registered the keyboard; removed on
+/// registration and when the keyboard is enabled, so an upgrade leaves no second entry behind.
+pub const LANGID_OLD: u16 = 0x0845;
 /// The name Windows shows in its language and keyboard lists.
 pub const DISPLAY_NAME: &str = "নুকতা বাংলা";
 

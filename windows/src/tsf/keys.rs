@@ -4,7 +4,7 @@
 
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_DOWN, VK_ESCAPE, VK_LCONTROL, VK_LEFT,
+    GetKeyState, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_DOWN, VK_ESCAPE, VK_F12, VK_LCONTROL, VK_LEFT,
     VK_LMENU, VK_LSHIFT, VK_LWIN, VK_MENU, VK_NUMLOCK, VK_RCONTROL, VK_RETURN, VK_RIGHT, VK_RMENU,
     VK_RSHIFT, VK_RWIN, VK_SCROLL, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
@@ -100,6 +100,11 @@ impl KeyEvent {
             us_character_for_virtual_key(self.vk)
         }?;
         Some(if self.shift { pair.1 } else { pair.0 })
+    }
+
+    /// F12 alone: English ⇄ Bangla, as in Avro.
+    pub fn is_toggle(&self) -> bool {
+        self.vk == VK_F12.0 && !self.shift && !self.ctrl && !self.alt
     }
 
     pub fn is_backspace(&self) -> bool {

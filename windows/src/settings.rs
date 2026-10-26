@@ -103,6 +103,23 @@ impl Settings {
         }
     }
 
+    /// English: keys go to the app untouched. Toggled with F12, the top bar and the tray icon;
+    /// Windows-only (macOS and Linux switch input sources instead). On until Bangla is first picked.
+    pub fn english(&self) -> bool {
+        self.flag("english", true)
+    }
+
+    /// The floating bar (NuktaBangla.exe): shown unless hidden, and where it was left.
+    pub fn bar_visible(&self) -> bool {
+        self.flag("barVisible", true)
+    }
+
+    pub fn bar_position(&self) -> Option<(i32, i32)> {
+        let x = self.values.get("barX").and_then(Value::as_i64)?;
+        let y = self.values.get("barY").and_then(Value::as_i64)?;
+        Some((x as i32, y as i32))
+    }
+
     pub fn typing_mode(&self) -> TypingMode {
         self.string("typingMode").and_then(TypingMode::from_name).unwrap_or_default()
     }
@@ -152,6 +169,29 @@ impl Settings {
 
     pub fn set_layout(&mut self, layout: Layout) {
         self.set("layout", layout.name().into());
+    }
+
+    pub fn set_english(&mut self, on: bool) {
+        self.set("english", on.into());
+    }
+
+    pub fn set_bar_visible(&mut self, on: bool) {
+        self.set("barVisible", on.into());
+    }
+
+    /// The tray icon was put on the taskbar (rather than behind its ^) once; never again, so a user
+    /// who hides it later keeps it hidden.
+    pub fn tray_promoted(&self) -> bool {
+        self.flag("trayPromoted", false)
+    }
+
+    pub fn set_tray_promoted(&mut self) {
+        self.set("trayPromoted", true.into());
+    }
+
+    pub fn set_bar_position(&mut self, x: i32, y: i32) {
+        self.set("barX", x.into());
+        self.set("barY", y.into());
     }
 
     pub fn set_typing_mode(&mut self, mode: TypingMode) {

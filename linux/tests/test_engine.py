@@ -224,6 +224,18 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(nxt.committed, "ক্তি")
         self.assertEqual(nxt.display, "ব")
 
+    def test_a_shows_at_once(self):
+        # অ (Shift+F) is on screen as soon as it is typed; an f still makes it আ.
+        e = Engine()
+        out = e.process_character("F")
+        self.assertEqual((out.committed, out.visible), ("", "অ"))
+        out = e.process_character("f")
+        self.assertEqual((out.committed, out.visible), ("আ", ""))
+        e = Engine()
+        e.process_character("F")
+        out = e.process_character("j")
+        self.assertEqual((out.committed, out.visible), ("অ", "ক"))
+
     def test_non_bijoy_keys_return_none(self):
         e = Engine()
         self.assertIsNone(e.process_character(" "))

@@ -17,7 +17,7 @@ use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::UI::Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath, KF_FLAG_NO_PACKAGE_REDIRECTION};
 
-use crate::tsf::{guid_string, CLSID_TEXT_SERVICE, GUID_PROFILE, LANGID_BANGLA};
+use crate::tsf::{guid_string, CLSID_TEXT_SERVICE, GUID_PROFILE, LANGID_KEYBOARD, LANGID_OLD};
 
 /// `%APPDATA%\Nukta Bangla`: the settings file, and what riti and the pick memory learn.
 ///
@@ -134,9 +134,9 @@ fn allow_app_containers(directory: &Path) -> Result<()> {
     }
 }
 
-/// `InstallLayoutOrTip`'s name for our profile: language:{text service}{profile}.
-fn profile_string() -> Vec<u16> {
-    format!("{LANGID_BANGLA:04x}:{}{}", guid_string(&CLSID_TEXT_SERVICE), guid_string(&GUID_PROFILE))
+/// `InstallLayoutOrTip`'s name for our profile in `language`: language:{text service}{profile}.
+fn profile_string(language: u16) -> Vec<u16> {
+    format!("{language:04x}:{}{}", guid_string(&CLSID_TEXT_SERVICE), guid_string(&GUID_PROFILE))
         .encode_utf16()
         .chain(Some(0))
         .collect()
@@ -144,19 +144,99 @@ fn profile_string() -> Vec<u16> {
 
 const ILOT_UNINSTALL: u32 = 0x0000_0001;
 
-/// Adds নুকতা বাংলা to the current user's keyboards (adding Bangla to their languages if needed),
-/// or removes it. The DLLs must be registered first.
+/// The plain US keyboard, as `InstallLayoutOrTip` names it.
+const US_KEYBOARD: PCWSTR = w!("0409:00000409");
+
+/// Adds নুকতা বাংলা to the current user's keyboards, or removes it. The DLLs must be registered
+/// first. An entry left under Bangla by an older version is removed either way.
+///
+/// Added, it is the default and the only English keyboard: its English mode types exactly as the
+/// US keyboard does, and with one keyboard Windows shows no language indicator (EN) in the taskbar.
+/// English and Bangla are switched with F12 and নুকতা বাংলা's own top bar and tray icon instead.
+/// Keyboards of other languages the user added are left alone. Removed, the US keyboard comes back
+/// first, so the user is never left without one.
 pub fn enable_for_user(enable: bool) -> Result<()> {
-    type InstallLayoutOrTip = unsafe extern "system" fn(PCWSTR, u32) -> BOOL;
+    type LayoutOrTip = unsafe extern "system" fn(PCWSTR, u32) -> BOOL;
     unsafe {
         let library = LoadLibraryW(w!("input.dll"))?;
-        let Some(function) = GetProcAddress(library, s!("InstallLayoutOrTip")) else {
+        let Some(install) = GetProcAddress(library, s!("InstallLayoutOrTip")) else {
             return Err(windows::core::Error::from_thread());
         };
-        let install: InstallLayoutOrTip = std::mem::transmute(function);
-        let profile = profile_string();
-        install(PCWSTR(profile.as_ptr()), if enable { 0 } else { ILOT_UNINSTALL }).ok()
+        let install: LayoutOrTip = std::mem::transmute(install);
+        let set_default: Option<LayoutOrTip> =
+            GetProcAddress(library, s!("SetDefaultLayoutOrTip")).map(|f| std::mem::transmute(f));
+        let old = profile_string(LANGID_OLD);
+        let _ = install(PCWSTR(old.as_ptr()), ILOT_UNINSTALL);
+        let profile = profile_string(LANGID_KEYBOARD);
+        if enable {
+            install(PCWSTR(profile.as_ptr()), 0).ok()?;
+            if let Some(set_default) = set_default {
+                let _ = set_default(PCWSTR(profile.as_ptr()), 0);
+            }
+            let _ = install(US_KEYBOARD, ILOT_UNINSTALL);
+        } else {
+            let _ = install(US_KEYBOARD, 0);
+            if let Some(set_default) = set_default {
+                let _ = set_default(US_KEYBOARD, 0);
+            }
+            install(PCWSTR(profile.as_ptr()), ILOT_UNINSTALL).ok()?;
+        }
+        Ok(())
     }
+}
+
+/// Makes নুকতা বাংলা the active keyboard in every app of this sign-in session, as when Bangla is
+/// picked from the floating bar while another keyboard (the plain US one) is active.
+pub fn activate_keyboard() -> Result<()> {
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Input::KeyboardAndMouse::HKL;
+    use windows::Win32::UI::TextServices::{
+        CLSID_TF_InputProcessorProfiles, ITfInputProcessorProfileMgr, TF_IPPMF_DONTCARECURRENTINPUTLANGUAGE,
+        TF_IPPMF_FORSESSION, TF_PROFILETYPE_INPUTPROCESSOR,
+    };
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let profiles: ITfInputProcessorProfileMgr =
+            CoCreateInstance(&CLSID_TF_InputProcessorProfiles, None, CLSCTX_INPROC_SERVER)?;
+        profiles.ActivateProfile(
+            TF_PROFILETYPE_INPUTPROCESSOR,
+            LANGID_KEYBOARD,
+            &CLSID_TEXT_SERVICE,
+            &GUID_PROFILE,
+            HKL::default(),
+            TF_IPPMF_FORSESSION | TF_IPPMF_DONTCARECURRENTINPUTLANGUAGE,
+        )
+    }
+}
+
+/// The bundled Bangla font, Noto Serif Bengali, in `fonts\` of the install folder (`dir`: the
+/// folder of the programs), if it is there.
+pub fn bangla_font_in(dir: &Path) -> Option<PathBuf> {
+    let font = dir.join("fonts").join("NotoSerifBengali.ttf");
+    font.exists().then_some(font)
+}
+
+/// The bundled Bangla font for a program in the install folder (the top bar, the settings).
+pub fn bangla_font_for_program() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    bangla_font_in(exe.parent()?)
+}
+
+/// Makes the bundled Bangla font usable by GDI in this process only (nothing is installed in
+/// Windows), once. False if it isn't there.
+pub fn load_bangla_font_for_gdi(font: &Path) -> bool {
+    use std::sync::OnceLock;
+    use windows::Win32::Graphics::Gdi::{AddFontResourceExW, FR_PRIVATE};
+    static LOADED: OnceLock<bool> = OnceLock::new();
+    *LOADED.get_or_init(|| {
+        let path: Vec<u16> = font.as_os_str().to_string_lossy().encode_utf16().chain(Some(0)).collect();
+        unsafe { AddFontResourceExW(PCWSTR(path.as_ptr()), FR_PRIVATE, None) > 0 }
+    })
+}
+
+/// The floating bar and tray icon, beside the settings program.
+pub fn bar_program(dll: &Path) -> PathBuf {
+    settings_program(dll).with_file_name("NuktaBangla.exe")
 }
 
 /// The settings program, beside the installed DLLs' folders (`x64\`, `x86\`).

@@ -33,7 +33,8 @@ if ($dumpbin) {
     foreach ($target in $Targets) {
         $exports = & $dumpbin.Source /exports "target\$target\release\nukta_bangla.dll" | Out-String
         foreach ($name in 'DllGetClassObject', 'DllCanUnloadNow', 'DllRegisterServer', 'DllUnregisterServer') {
-            if ($exports -notmatch "\s$name\r?\n") { throw "$target DLL does not export $name" }
+            # 32-bit dumpbin lists the decorated symbol after the name: "DllGetClassObject = _DllGetClassObject@12".
+            if ($exports -notmatch "(?m)\s$name(\s*=.*)?\r?$") { throw "$target DLL does not export $name" }
         }
     }
     Write-Host 'DLL exports checked.'

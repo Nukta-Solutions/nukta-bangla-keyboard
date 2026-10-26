@@ -79,6 +79,9 @@ class Syllable:
         """Nothing goes on screen until there is a consonant to hang it on, and a trailing ্ waits
         for the next key (it may turn into a full vowel: ``j g d`` → কই)."""
         if not self.has_cluster:
+            # অ (Shift+F) shows straight away; an f after it still turns it into আ.
+            if self.tokens and self.tokens[0][0] == "vowel":
+                return self.rendered
             return ""
         if not (self.last_is_hasanta or self.waiting_kar is not None):
             return self.rendered

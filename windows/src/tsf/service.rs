@@ -5,47 +5,39 @@
 //! the result as a composition plus finished text (see `edit`).
 //!
 //! A key the layout doesn't use goes to the app, as on macOS and Linux. While a syllable or word is
-//! in progress, it first finishes it: the key is taken, the text committed, and the key sent again,
-//! so the app gets it after the finished text (TSF has no "finish, then pass on" of its own).
+//! in progress, it first finishes it, then leaves the key unclaimed so the app gets it after the
+//! finished text. All of this happens the first time TSF asks about the key (`OnTestKeyDown`), as
+//! Weasel (Rime) does: the key itself then goes on to the app in its place in the queue. Sending a
+//! copy of it instead (`SendInput`) put it behind keys typed after it: a space landing after the
+//! next word's first letters.
 
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
 use std::rc::Rc;
 
-use windows::core::{implement, w, ComObject, IUnknownImpl, Interface, Ref, Result, BOOL, GUID, PCWSTR};
+use windows::core::{implement, w, IUnknownImpl, Interface, Ref, Result, BOOL, GUID, PCWSTR};
 use windows::Win32::Foundation::{E_INVALIDARG, HWND, LPARAM, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
-use windows::Win32::System::SystemInformation::GetTickCount64;
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, VIRTUAL_KEY,
-};
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::TextServices::{
     CLSID_TF_CategoryMgr, IEnumTfDisplayAttributeInfo, ITfCategoryMgr, ITfComposition, ITfCompositionSink,
     ITfCompositionSink_Impl, ITfContext, ITfDisplayAttributeInfo, ITfDisplayAttributeProvider,
     ITfDisplayAttributeProvider_Impl, ITfDocumentMgr, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr,
-    ITfLangBarItemMgr, ITfSource, ITfTextInputProcessor_Impl, ITfTextInputProcessorEx, ITfTextInputProcessorEx_Impl,
+    ITfSource, ITfTextInputProcessor_Impl, ITfTextInputProcessorEx, ITfTextInputProcessorEx_Impl,
     ITfThreadMgr, ITfThreadMgrEventSink, ITfThreadMgrEventSink_Impl,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, GetGUIThreadInfo, GetMessageExtraInfo, TrackPopupMenuEx,
-    GUITHREADINFO, MF_CHECKED, MF_SEPARATOR, MF_STRING, MF_UNCHECKED, SW_SHOWNORMAL, TPM_NONOTIFY, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON,
+    GetCursorPos, GetGUIThreadInfo, GUITHREADINFO, SW_SHOWNORMAL,
 };
 
 use super::candidates::{CandidateWindow, Event};
 use super::display_attribute::{DisplayAttributeEnum, DisplayAttributeInfo};
 use super::keys::KeyEvent;
-use super::langbar::{self, Command, LangBarButton};
 use super::{edit, guard, register, DllRef, GUID_DISPLAY_ATTRIBUTE};
 use crate::bijoy::{self, Engine};
 use crate::phonetic::{self, PhoneticComposer};
 use crate::settings::{Layout, PopupDirection, Settings};
 use crate::win;
-
-/// Marks the keys this service sends again, so it lets them through to the app.
-const RESENT_MARK: usize = 0x4E55_4B54; // "NUKT"
 
 #[implement(ITfTextInputProcessorEx, ITfThreadMgrEventSink, ITfKeyEventSink, ITfCompositionSink, ITfDisplayAttributeProvider)]
 pub(super) struct TextService {
@@ -66,13 +58,16 @@ struct State {
     bijoy: Engine,
     /// The layout this service is typing with; follows the `layout` setting.
     layout: Layout,
+    /// English mode: every key goes to the app. Follows the `english` setting.
+    english: bool,
     settings: Option<Settings>,
-    button: Option<ComObject<LangBarButton>>,
     candidates: Option<CandidateWindow>,
     /// TSF's number for our display attribute (the underline).
     attribute: u32,
-    /// Keys sent again (`resend`) and not yet seen coming back: (virtual key, when).
-    resent: VecDeque<(u16, u64)>,
+    /// The key (virtual key code) `OnTestKeyDown` handled and claimed: the `OnKeyDown` that follows
+    /// only confirms it. Cleared when the key comes up, so an app that tests a key and never sends
+    /// it can't make the next key vanish.
+    key_handled: Option<u16>,
 }
 
 thread_local! {
@@ -146,20 +141,28 @@ impl TextService_Impl {
 
     /// Whether this key is ours. No side effects on the text: TSF asks before every key.
     fn wants(&self, event: &KeyEvent) -> bool {
-        if event.is_modifier() || self.is_resent(event) {
+        if event.is_modifier() {
             return false;
         }
-        self.refresh_settings();
-        let (current, wanted, bijoy_composing, has_composition) = {
-            let state = self.state.borrow();
-            let wanted = state.settings.as_ref().map_or(state.layout, Settings::layout);
-            (state.layout, wanted, state.bijoy.is_composing(), state.composition.is_some())
-        };
-        let composing = bijoy_composing || phonetic_composing() || has_composition;
-        if wanted != current && composing {
-            // The layout was switched elsewhere: the word typed with the old one is finished first.
+        if event.is_toggle() {
             return true;
         }
+        self.refresh_settings();
+        let (current, wanted, english, bijoy_composing, has_composition) = {
+            let state = self.state.borrow();
+            let wanted = state.settings.as_ref().map_or((state.layout, state.english), |s| (s.layout(), s.english()));
+            ((state.layout, state.english), wanted.0, wanted.1, state.bijoy.is_composing(), state.composition.is_some())
+        };
+        let composing = bijoy_composing || phonetic_composing() || has_composition;
+        if (wanted, english) != current && composing {
+            // The mode was switched elsewhere: the word typed with the old one is finished first.
+            return true;
+        }
+        if english {
+            // English, as with Avro: the key is the app's, once a word in progress is finished.
+            return composing;
+        }
+        let current = current.0;
         let layout = wanted;
         let bijoy_composing = bijoy_composing && layout == current;
 
@@ -189,65 +192,66 @@ impl TextService_Impl {
         }
     }
 
-    /// A key this service sent again is on its way back: it goes to the app.
-    fn is_resent(&self, event: &KeyEvent) -> bool {
-        if unsafe { GetMessageExtraInfo() }.0 as usize == RESENT_MARK {
-            return true;
-        }
-        let now = unsafe { GetTickCount64() };
-        let mut state = self.state.borrow_mut();
-        state.resent.retain(|&(_, when)| now.saturating_sub(when) < 1000);
-        match state.resent.iter().position(|&(vk, _)| vk == event.vk) {
-            Some(index) => {
-                state.resent.remove(index);
-                true
-            }
-            None => false,
-        }
-    }
-
     // MARK: Handling a key
 
     fn handle_key(&self, context: &ITfContext, event: &KeyEvent) -> Result<bool> {
         if !self.wants(event) {
             return Ok(false);
         }
-        if self.follow_layout_setting(Some(context)) && !self.wants(event) {
-            // Taken only to finish the old layout's word; the new layout leaves it to the app.
-            self.resend(event);
+        if event.is_toggle() {
+            // The word in progress is finished where it was typed, then F12 switches.
+            self.follow_layout_setting(Some(context));
+            self.commit_all(Some(context), true);
+            self.toggle_mode();
             return Ok(true);
         }
-        let layout = self.state.borrow().layout;
+        if self.follow_layout_setting(Some(context)) && !self.wants(event) {
+            // Only the old layout's word to finish; the new layout leaves the key to the app.
+            return Ok(false);
+        }
+        let (layout, english) = {
+            let state = self.state.borrow();
+            (state.layout, state.english)
+        };
+        if english {
+            self.commit_all(Some(context), true);
+            return Ok(false);
+        }
 
         let word_delete = layout == Layout::Phonetic && event.ctrl && !event.alt && event.is_backspace();
         if event.is_shortcut() && !word_delete {
             self.commit_all(Some(context), true);
-            self.resend(event);
-            return Ok(true);
+            return Ok(false);
         }
 
-        match layout {
+        Ok(match layout {
             Layout::Bijoy => self.handle_bijoy(context, event),
             Layout::Phonetic => self.handle_phonetic(context, event),
-        }
-        Ok(true)
+        })
     }
 
-    fn handle_bijoy(&self, context: &ITfContext, event: &KeyEvent) {
+    /// True if the key was used up; false if the app should have it (after the finished syllable).
+    fn handle_bijoy(&self, context: &ITfContext, event: &KeyEvent) -> bool {
         if event.is_backspace() {
             let out = self.state.borrow_mut().bijoy.backspace();
-            if let Some(out) = out {
-                self.show_bijoy(context, out);
-            }
-            return;
+            return match out {
+                Some(out) => {
+                    self.show_bijoy(context, out);
+                    true
+                }
+                None => false,
+            };
         }
         let out = event.character().and_then(|c| self.state.borrow_mut().bijoy.process_character(c));
         match out {
-            Some(out) => self.show_bijoy(context, out),
+            Some(out) => {
+                self.show_bijoy(context, out);
+                true
+            }
             None => {
                 // Space, Enter, Tab, arrows, punctuation…: finish the syllable, let the app have the key.
                 self.commit_all(Some(context), true);
-                self.resend(event);
+                false
             }
         }
     }
@@ -259,11 +263,11 @@ impl TextService_Impl {
         }
     }
 
-    fn handle_phonetic(&self, context: &ITfContext, event: &KeyEvent) {
+    /// True if the key was used up; false if the app should have it (after the finished word).
+    fn handle_phonetic(&self, context: &ITfContext, event: &KeyEvent) -> bool {
         let Some(key) = event.phonetic_key() else {
             self.commit_all(Some(context), true);
-            self.resend(event);
-            return;
+            return false;
         };
         let out = {
             let state = self.state.borrow();
@@ -272,14 +276,11 @@ impl TextService_Impl {
         let Some(out) = out else {
             // riti failed: whatever was on screen stays, as typed so far.
             self.forget_composition();
-            self.resend(event);
-            return;
+            return false;
         };
         let handled = out.handled;
         self.apply_phonetic(context, out, true);
-        if !handled {
-            self.resend(event);
-        }
+        handled
     }
 
     /// Puts a phonetic result into the app and updates the suggestion list.
@@ -292,20 +293,6 @@ impl TextService_Impl {
             }
         };
         self.show_candidates(rect);
-    }
-
-    /// Sends the key again, for the app: after the text just committed.
-    fn resend(&self, event: &KeyEvent) {
-        let flags = if event.extended { KEYEVENTF_EXTENDEDKEY } else { KEYBD_EVENT_FLAGS(0) };
-        let input = INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT { wVk: VIRTUAL_KEY(event.vk), wScan: event.scan as u16, dwFlags: flags, time: 0, dwExtraInfo: RESENT_MARK },
-            },
-        };
-        let now = unsafe { GetTickCount64() };
-        self.state.borrow_mut().resent.push_back((event.vk, now));
-        unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
     }
 
     // MARK: Writing
@@ -507,83 +494,53 @@ impl TextService_Impl {
         }
     }
 
-    /// Takes up the layout picked elsewhere, finishing the word in progress with the old one first.
-    /// True if the layout changed.
+    /// Takes up the layout or English/Bangla picked elsewhere (the floating bar, another app),
+    /// finishing the word in progress with the old one first. True if either changed.
     fn follow_layout_setting(&self, context: Option<&ITfContext>) -> bool {
-        let wanted = self.state.borrow().settings.as_ref().map(Settings::layout);
-        let Some(wanted) = wanted else { return false };
-        if wanted == self.state.borrow().layout {
+        let wanted = self.state.borrow().settings.as_ref().map(|s| (s.layout(), s.english()));
+        let Some((layout, english)) = wanted else { return false };
+        let current = {
+            let state = self.state.borrow();
+            (state.layout, state.english)
+        };
+        if (layout, english) == current {
             return false;
         }
         self.commit_all(context, context.is_some());
         let state = &mut *self.state.borrow_mut();
-        state.layout = wanted;
-        if let Some(button) = &state.button {
-            button.set_layout(wanted);
-        }
+        state.layout = layout;
+        state.english = english;
         true
     }
 
-    fn switch_layout(&self, layout: Layout) {
+    /// Picks a mode: English (None) or a Bangla layout. Saved to the settings file, so the top bar
+    /// and every other app follow.
+    fn switch_mode(&self, mode: Option<Layout>) {
         // Finish the word in progress with the layout it was typed in.
         self.commit_all(None, false);
         let state = &mut *self.state.borrow_mut();
-        state.layout = layout;
+        state.english = mode.is_none();
+        if let Some(layout) = mode {
+            state.layout = layout;
+        }
         if let Some(settings) = state.settings.as_mut() {
-            settings.set_layout(layout);
-        }
-        if let Some(button) = &state.button {
-            button.set_layout(layout);
-        }
-    }
-
-    fn command(&self, command: Command) {
-        match command {
-            Command::Toggle => {
-                let layout = self.state.borrow().layout.toggled();
-                self.switch_layout(layout);
+            if let Some(layout) = mode {
+                settings.set_layout(layout);
             }
-            Command::Menu(point) => self.show_menu(point),
+            settings.set_english(mode.is_none());
         }
     }
 
-    /// The নু menu: the two layouts, settings, about. Owned by the focused document's window, as a
-    /// menu must belong to a window of the thread showing it.
-    fn show_menu(&self, point: POINT) {
-        let Some(owner) = self.focused_window().or_else(|| self.ensure_candidate_window()) else { return };
-        let current = self.state.borrow().layout;
-        const BIJOY: usize = 1;
-        const PHONETIC: usize = 2;
-        const SETTINGS: usize = 3;
-        const ABOUT: usize = 4;
-        let chosen = unsafe {
-            let Ok(menu) = CreatePopupMenu() else { return };
-            let check = |layout| if current == layout { MF_CHECKED } else { MF_UNCHECKED };
-            let _ = AppendMenuW(menu, MF_STRING | check(Layout::Bijoy), BIJOY, w!("বিজয় লেআউট"));
-            let _ = AppendMenuW(menu, MF_STRING | check(Layout::Phonetic), PHONETIC, w!("ফোনেটিক"));
-            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-            let _ = AppendMenuW(menu, MF_STRING, SETTINGS, w!("সেটিংস…"));
-            let _ = AppendMenuW(menu, MF_STRING, ABOUT, w!("নুকতা বাংলা সম্পর্কে…"));
-            let chosen = TrackPopupMenuEx(menu, (TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON).0, point.x, point.y, owner, None);
-            let _ = DestroyMenu(menu);
-            chosen.0 as usize
+    /// English ⇄ Bangla (F12), with the beep. The top bar follows through the settings file; if it
+    /// was closed with Exit, it comes back.
+    fn toggle_mode(&self) {
+        let (english, layout) = {
+            let state = self.state.borrow();
+            (state.english, state.layout)
         };
-        match chosen {
-            BIJOY => self.switch_layout(Layout::Bijoy),
-            PHONETIC => self.switch_layout(Layout::Phonetic),
-            SETTINGS => open_settings_program(None),
-            ABOUT => open_settings_program(Some(w!("--about"))),
-            _ => {}
-        }
-    }
-
-    /// The window of the document that has the keyboard on this thread.
-    fn focused_window(&self) -> Option<HWND> {
-        let thread_mgr = self.state.borrow().thread_mgr.clone()?;
-        unsafe {
-            let window = thread_mgr.GetFocus().ok()?.GetTop().ok()?.GetActiveView().ok()?.GetWnd().ok()?;
-            (!window.is_invalid()).then_some(window)
-        }
+        self.switch_mode(if english { Some(layout) } else { None });
+        crate::sound::play_toggle(english);
+        start_bar();
     }
 
     // MARK: Activation
@@ -591,11 +548,13 @@ impl TextService_Impl {
     fn activate(&self, thread_mgr: &ITfThreadMgr, client: u32) -> Result<()> {
         let settings = Settings::new(&win::prepare_data_directory());
         let layout = settings.layout();
+        let english = settings.english();
         {
             let mut state = self.state.borrow_mut();
             state.thread_mgr = Some(thread_mgr.clone());
             state.client = client;
             state.layout = layout;
+            state.english = english;
             state.settings = Some(settings);
             state.bijoy.reset();
         }
@@ -615,25 +574,13 @@ impl TextService_Impl {
                     self.state.borrow_mut().attribute = atom;
                 }
             }
-
-            let this = self.to_object();
-            let button = ComObject::new(LangBarButton::new(layout, move |command| {
-                let _ = guard(|| {
-                    this.command(command);
-                    Ok(())
-                });
-            }));
-            if let Ok(items) = thread_mgr.cast::<ITfLangBarItemMgr>() {
-                let _ = items.AddItem(&langbar::as_button(&button));
-            }
-            self.state.borrow_mut().button = Some(button);
         }
         Ok(())
     }
 
     fn deactivate(&self) {
         self.hide_candidates();
-        let (thread_mgr, client, cookie, key_sink, button, candidates) = {
+        let (thread_mgr, client, cookie, key_sink, candidates) = {
             let mut state = self.state.borrow_mut();
             state.bijoy.reset();
             state.composition = None;
@@ -643,20 +590,13 @@ impl TextService_Impl {
                 state.client,
                 state.thread_mgr_cookie.take(),
                 std::mem::take(&mut state.key_sink_advised),
-                state.button.take(),
                 state.candidates.take(),
             )
         };
         with_existing_composer(|c| c.discard());
         drop(candidates);
-        if let Some(button) = &button {
-            button.disconnect();
-        }
         let Some(thread_mgr) = thread_mgr else { return };
         unsafe {
-            if let (Some(button), Ok(items)) = (&button, thread_mgr.cast::<ITfLangBarItemMgr>()) {
-                let _ = items.RemoveItem(&langbar::as_button(button));
-            }
             if key_sink {
                 if let Ok(keystrokes) = thread_mgr.cast::<ITfKeystrokeMgr>() {
                     let _ = keystrokes.UnadviseKeyEventSink(client);
@@ -746,21 +686,35 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         })
     }
 
+    /// The key is handled here, the first time TSF asks: a word finished for a key the app should
+    /// have is committed before the app sees the key. Claiming the key makes TSF call `OnKeyDown`,
+    /// which then only confirms.
     fn OnTestKeyDown(&self, context: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        if context.is_null() {
-            return Ok(false.into());
-        }
         let event = KeyEvent::new(wparam, lparam);
-        Ok(guard(|| Ok(self.wants(&event))).unwrap_or(false).into())
+        if self.state.borrow().key_handled == Some(event.vk) {
+            return Ok(true.into()); // asked again about the key already handled
+        }
+        let Some(context) = context.as_ref() else { return Ok(false.into()) };
+        let claimed = guard(|| self.handle_key(context, &event)).unwrap_or(false);
+        self.state.borrow_mut().key_handled = claimed.then_some(event.vk);
+        Ok(claimed.into())
     }
 
+    /// After `OnTestKeyDown` claimed the key: nothing left to do. Apps that skip the test call
+    /// this alone, and it handles the key itself.
     fn OnKeyDown(&self, context: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        let Some(context) = context.as_ref() else { return Ok(false.into()) };
         let event = KeyEvent::new(wparam, lparam);
+        if self.state.borrow_mut().key_handled.take() == Some(event.vk) {
+            return Ok(true.into());
+        }
+        let Some(context) = context.as_ref() else { return Ok(false.into()) };
         Ok(guard(|| self.handle_key(context, &event)).unwrap_or(false).into())
     }
 
     fn OnTestKeyUp(&self, _context: Ref<ITfContext>, _wparam: WPARAM, _lparam: LPARAM) -> Result<BOOL> {
+        if let Ok(mut state) = self.state.try_borrow_mut() {
+            state.key_handled = None;
+        }
         Ok(false.into())
     }
 
@@ -817,19 +771,17 @@ fn caret_rect() -> RECT {
     }
 }
 
-/// The settings program (or its about box), installed beside the DLLs. Store apps may not start
-/// programs; the menu then does nothing there.
-fn open_settings_program(arguments: Option<PCWSTR>) {
-    let program = win::settings_program(std::path::Path::new(&register::dll_path()));
+/// The floating bar and tray icon (NuktaBangla.exe), unless it is already running.
+fn start_bar() {
+    if unsafe { windows::Win32::UI::WindowsAndMessaging::FindWindowW(w!("NuktaBanglaBar"), None) }.is_ok() {
+        return;
+    }
+    let program = win::bar_program(std::path::Path::new(&register::dll_path()));
+    if !program.exists() {
+        return;
+    }
     let program: Vec<u16> = program.to_string_lossy().encode_utf16().chain(Some(0)).collect();
     unsafe {
-        ShellExecuteW(
-            None,
-            w!("open"),
-            PCWSTR(program.as_ptr()),
-            arguments.unwrap_or(PCWSTR::null()),
-            PCWSTR::null(),
-            SW_SHOWNORMAL,
-        );
+        ShellExecuteW(None, w!("open"), PCWSTR(program.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
     }
 }

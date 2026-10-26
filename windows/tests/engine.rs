@@ -159,6 +159,21 @@ fn visible_holds_back_what_has_no_consonant_yet() {
     assert_eq!(e.process_character('c').unwrap().visible, "কে");
 }
 
+/// অ (Shift+F) is on screen as soon as it is typed, not only after the next key; an f still
+/// makes it আ.
+#[test]
+fn a_shows_at_once() {
+    let mut e = Engine::new();
+    let out = e.process_character('F').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("", "অ"));
+    let out = e.process_character('f').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("আ", ""));
+    let mut e = Engine::new();
+    e.process_character('F');
+    let out = e.process_character('j').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("অ", "ক"));
+}
+
 #[test]
 fn non_bijoy_keys_return_none() {
     let mut e = Engine::new();

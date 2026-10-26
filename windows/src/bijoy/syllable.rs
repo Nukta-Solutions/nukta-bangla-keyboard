@@ -81,6 +81,10 @@ impl Syllable {
     /// for the next key (it may turn into a full vowel: j g d → কই).
     pub(crate) fn visible_rendered(&self) -> String {
         if !self.has_cluster() {
+            // অ (Shift+F) shows straight away; an f after it still turns it into আ.
+            if matches!(self.tokens.first(), Some(Token::Vowel(_))) {
+                return self.rendered();
+            }
             return String::new();
         }
         let waiting = matches!(self.tokens.last(), Some(Token::WaitingKar(_)));

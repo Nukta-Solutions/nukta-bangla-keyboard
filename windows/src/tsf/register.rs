@@ -21,22 +21,25 @@ use windows::Win32::UI::TextServices::{
     GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT, GUID_TFCAT_TIP_KEYBOARD,
 };
 
-use super::{module, wide, CLSID_TEXT_SERVICE, DISPLAY_NAME, GUID_PROFILE, LANGID_BANGLA};
+use super::{module, wide, CLSID_TEXT_SERVICE, DISPLAY_NAME, GUID_PROFILE, LANGID_KEYBOARD, LANGID_OLD};
 
 /// What the text service is, for TSF:
 /// - a keyboard text service, with its own display attribute (the underline);
 /// - fit for Store apps (immersive), which also need it loadable without COM (comless);
-/// - with an input indicator in the taskbar (systray).
 ///
-/// Not listed, on purpose: secure mode (the sign-in screen) and UI-less mode (games drawing the
-/// suggestion list themselves).
-const CATEGORIES: [GUID; 5] = [
+/// Not listed, on purpose: secure mode (the sign-in screen), UI-less mode (games drawing the
+/// suggestion list themselves), and system-tray support: the keyboard puts nothing beside Windows'
+/// language indicator. English and Bangla are switched with F12 and নুকতা বাংলা's own top bar and
+/// tray icon.
+const CATEGORIES: [GUID; 4] = [
     GUID_TFCAT_TIP_KEYBOARD,
     GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER,
     GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,
     GUID_TFCAT_TIPCAP_COMLESS,
-    GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
 ];
+
+/// Categories earlier versions registered, removed again on (re-)registration.
+const OLD_CATEGORIES: [GUID; 1] = [GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT];
 
 pub(super) fn register() -> Result<()> {
     let _com = Com::init();
@@ -46,11 +49,12 @@ pub(super) fn register() -> Result<()> {
     unsafe {
         let profiles: ITfInputProcessorProfileMgr =
             CoCreateInstance(&CLSID_TF_InputProcessorProfiles, None, CLSCTX_INPROC_SERVER)?;
+        let _ = profiles.UnregisterProfile(&CLSID_TEXT_SERVICE, LANGID_OLD, &GUID_PROFILE, 0);
         let name: Vec<u16> = DISPLAY_NAME.encode_utf16().collect();
         let icon: Vec<u16> = icon_path(&dll).encode_utf16().collect();
         profiles.RegisterProfile(
             &CLSID_TEXT_SERVICE,
-            LANGID_BANGLA,
+            LANGID_KEYBOARD,
             &GUID_PROFILE,
             &name,
             &icon,
@@ -62,6 +66,9 @@ pub(super) fn register() -> Result<()> {
         )?;
 
         let categories: ITfCategoryMgr = CoCreateInstance(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER)?;
+        for category in &OLD_CATEGORIES {
+            let _ = categories.UnregisterCategory(&CLSID_TEXT_SERVICE, category, &CLSID_TEXT_SERVICE);
+        }
         for category in &CATEGORIES {
             categories.RegisterCategory(&CLSID_TEXT_SERVICE, category, &CLSID_TEXT_SERVICE)?;
         }
@@ -77,7 +84,7 @@ pub(super) fn unregister() -> Result<()> {
     unsafe {
         match CoCreateInstance::<_, ITfCategoryMgr>(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER) {
             Ok(categories) => {
-                for category in &CATEGORIES {
+                for category in CATEGORIES.iter().chain(&OLD_CATEGORIES) {
                     let _ = categories.UnregisterCategory(&CLSID_TEXT_SERVICE, category, &CLSID_TEXT_SERVICE);
                 }
             }
@@ -85,7 +92,9 @@ pub(super) fn unregister() -> Result<()> {
         }
         match CoCreateInstance::<_, ITfInputProcessorProfileMgr>(&CLSID_TF_InputProcessorProfiles, None, CLSCTX_INPROC_SERVER) {
             Ok(profiles) => {
-                let _ = profiles.UnregisterProfile(&CLSID_TEXT_SERVICE, LANGID_BANGLA, &GUID_PROFILE, 0);
+                for language in [LANGID_KEYBOARD, LANGID_OLD] {
+                    let _ = profiles.UnregisterProfile(&CLSID_TEXT_SERVICE, language, &GUID_PROFILE, 0);
+                }
             }
             Err(error) => result = result.and(Err(error)),
         }
@@ -102,14 +111,24 @@ pub(super) fn unregister() -> Result<()> {
 fn register_class(dll: &str) -> Result<()> {
     let class = format!("CLSID\\{}", guid_string(&CLSID_TEXT_SERVICE));
     let key = create_key(&class)?;
-    set_string(key, None, DISPLAY_NAME)?;
+    set_string(&key, None, DISPLAY_NAME)?;
     let server = create_key(&format!("{class}\\InprocServer32"))?;
-    set_string(server, None, dll)?;
-    set_string(server, Some("ThreadingModel"), "Apartment")?;
+    set_string(&server, None, dll)?;
+    set_string(&server, Some("ThreadingModel"), "Apartment")?;
     Ok(())
 }
 
-fn create_key(path: &str) -> Result<HKEY> {
+/// An open registry key, closed when dropped: after all of its values are written, not after the
+/// first one.
+struct Key(HKEY);
+
+impl Drop for Key {
+    fn drop(&mut self) {
+        let _ = unsafe { windows::Win32::System::Registry::RegCloseKey(self.0) };
+    }
+}
+
+fn create_key(path: &str) -> Result<Key> {
     let path = wide(path);
     let mut key = HKEY::default();
     unsafe {
@@ -126,23 +145,22 @@ fn create_key(path: &str) -> Result<HKEY> {
         )
         .ok()?;
     }
-    Ok(key)
+    Ok(Key(key))
 }
 
-fn set_string(key: HKEY, name: Option<&str>, value: &str) -> Result<()> {
+fn set_string(key: &Key, name: Option<&str>, value: &str) -> Result<()> {
     let name = name.map(wide);
     let value = wide(value);
     let bytes = unsafe { std::slice::from_raw_parts(value.as_ptr() as *const u8, value.len() * 2) };
     unsafe {
-        let status = RegSetValueExW(
-            key,
+        RegSetValueExW(
+            key.0,
             name.as_ref().map_or(PCWSTR::null(), |n| PCWSTR(n.as_ptr())),
             None,
             REG_SZ,
             Some(bytes),
-        );
-        let _ = windows::Win32::System::Registry::RegCloseKey(key);
-        status.ok()
+        )
+        .ok()
     }
 }
 

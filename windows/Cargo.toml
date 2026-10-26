@@ -4,7 +4,7 @@ version = "1.0.1"
 edition = "2021"
 license = "MIT"
 publish = false
-description = "নুকতা বাংলা: the Bijoy layout and Avro-style phonetic typing as a Windows input method (TSF)"
+description = "নুকতা বাংলা: the Bijoy layout and phonetic typing as a Windows input method (TSF)"
 
 [lib]
 name = "nukta_bangla"
@@ -15,6 +15,11 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "NuktaBanglaSettings"
 path = "src/bin/settings.rs"
+
+# The top bar and the tray icon.
+[[bin]]
+name = "NuktaBangla"
+path = "src/bin/bar.rs"
 
 [dependencies]
 # OpenBangla's phonetic engine (vendored, patched: see riti-bridge/Cargo.toml) and the keycode
@@ -27,9 +32,14 @@ serde_json = "1.0"
 version = "0.62"
 features = [
     "Win32_Foundation",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dxgi_Common",
     "Win32_Globalization",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
+    "Win32_Media_Audio",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
@@ -51,6 +61,14 @@ features = [
 
 [target.'cfg(windows)'.dependencies.windows-core]
 version = "0.62"
+
+# Points and transforms for Direct2D, which draws the top bar and its menus.
+[target.'cfg(windows)'.dependencies.windows-numerics]
+version = "0.3"
+
+# Puts the logo into the programs as their icon (installer/nukta-bangla.rc).
+[build-dependencies]
+embed-resource = "3"
 
 [profile.release]
 codegen-units = 1

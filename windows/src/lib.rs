@@ -10,6 +10,15 @@ pub mod phonetic;
 pub mod settings;
 
 #[cfg(windows)]
+pub mod gfx;
+
+#[cfg(windows)]
+pub mod logo;
+
+#[cfg(windows)]
+pub mod sound;
+
+#[cfg(windows)]
 pub mod win;
 
 #[cfg(windows)]

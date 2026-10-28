@@ -150,8 +150,9 @@ changes, so an edit takes effect on the next focus change (click into another wi
 | `englishWord` | `true` (default), `false` | The typed roman word itself as a candidate |
 | `colonIsBisarga` | `false` (default), `true` | `:` types a colon, or ঃ as in Avro. With a colon, ঃ words still come from the list (`dukho` → দুঃখ) |
 | `popupDirection` | `vertical` (default), `horizontal` | The suggestion list as a column or a row; a row also lets ← → move the selection |
+| `autoUpdateCheck` | `true` (default), `false` | Look for a new version once a day (below). Also switched from the layout menu |
 
-The file is yours to write — the engine only reads it. A missing file, a missing key or an
+The file is yours to write — the engine only writes `autoUpdateCheck` there, from the layout menu. A missing file, a missing key or an
 unrecognised value means that setting's default, and the rest of the file still applies; a file that
 is not valid JSON means all the defaults. The names and values are the ones macOS stores in
 UserDefaults, so one description covers both platforms.
@@ -161,6 +162,19 @@ What phonetic typing learns — your picks and riti's own selections — is kept
 the same names and formats: `phonetic-first-picks.json` and `phonetic-candidate-selection.json`.
 Your own autocorrect entries go in `autocorrect.json` there, a flat JSON object of
 `"typed": "replacement"`.
+
+### Updates
+
+Once a day, when a নুকতা বাংলা layout gets the focus, the engine asks GitHub for the latest release.
+If it is newer than the installed version, a small window says so, with the release's bullet points
+under "নতুন যা আছে": **ডাউনলোড** opens the keyboard's website, **পরে** asks again the next day, and
+**এই সংস্করণ বাদ দিন** stays quiet until the next release. The window never takes the keyboard
+focus, and its buttons only answer clicks. Without GTK 3's Python bindings (`gir1.2-gtk-3.0`) it is
+a desktop notification instead.
+
+The layout menu's **আপডেট** submenu turns the daily check off and on, and **এখনই আপডেট খুঁজুন** checks
+straight away. What the last check found is kept in `~/.config/nukta-bangla/update.json`. To update,
+run the install command again.
 
 ## How it works
 

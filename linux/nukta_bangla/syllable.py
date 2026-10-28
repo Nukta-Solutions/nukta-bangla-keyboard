@@ -66,6 +66,12 @@ class Syllable:
                 return True
         return False
 
+    @property
+    def accepts_phala(self):
+        """A phala can still join the consonant: after a kar too (ট + ু + ্য = ট্যু, typed either
+        way), but not after ং ঃ ঁ or a visible hasanta, which end the syllable."""
+        return self.has_cluster and not any(t[0] in ("sign", "explicitHasanta") for t in self.tokens)
+
     def append(self, token):
         self.tokens.append(token)
 
@@ -79,6 +85,9 @@ class Syllable:
         """Nothing goes on screen until there is a consonant to hang it on, and a trailing ্ waits
         for the next key (it may turn into a full vowel: ``j g d`` → কই)."""
         if not self.has_cluster:
+            # অ (Shift+F) shows straight away; an f after it still turns it into আ.
+            if self.tokens and self.tokens[0][0] == "vowel":
+                return self.rendered
             return ""
         if not (self.last_is_hasanta or self.waiting_kar is not None):
             return self.rendered

@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nukta Bangla Top Bar</title>
+<style>
+  /* Bangla in Noto Serif Bengali (bundled with the app), everything else in Aptos / Segoe UI. */
+  @font-face {
+    font-family: "Nukta Bengali";
+    src: url("../assets/fonts/NotoSerifBengali.ttf") format("truetype");
+    font-weight: 100 900;
+    unicode-range: U+0980-09FF, U+200C-200D, U+25CC, U+0964-0965;
+  }
+  :root {
+    --bar: #0D0807;
+    --box: #241C1A;
+    --box-border: #2D2827;
+    --hover: #1C1513;
+    --ink: rgba(255,255,255,0.90);
+    --dim: rgba(255,255,255,0.55);
+    --font: "Nukta Bengali", "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #7B7B7B;
+    font-family: var(--font);
+    color: var(--ink);
+    overflow: hidden;
+    user-select: none;
+  }
+  .note {
+    position: fixed; left: 16px; bottom: 64px; max-width: 520px;
+    font: 13px/1.5 "Segoe UI", "Nirmala UI", sans-serif; color: #fff; opacity: .9;
+    background: rgba(0,0,0,.35); padding: 12px 14px; border-radius: 8px;
+  }
+  .note b { color: #FFD7B5; }
+  .note button {
+    font: inherit; margin-top: 8px; padding: 4px 10px; border-radius: 6px;
+    border: 1px solid #2D2827; background: #241C1A; color: #fff; cursor: pointer;
+  }
+
+  /* The bar, exactly as designed: 358 wide, 10 padding, radius 10. */
+  .bar {
+    position: fixed; top: 24px; right: 220px;
+    width: 378px; padding: 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 10px; background: var(--bar);
+    box-shadow: 0 8px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.04);
+  }
+  .left { display: flex; gap: 12px; align-items: center; }
+  .logo { width: 37px; height: 28px; display: block; cursor: grab; border-radius: 6px; }
+  .logo:active { cursor: grabbing; }
+  .switch {
+    width: 161px; height: 28px; padding: 4px 4px 4px 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 6px; background: var(--box); border: 1px solid var(--box-border);
+    cursor: pointer; color: #fff; font-size: 15px; font-weight: 400; white-space: nowrap;
+  }
+  .switch:hover { background: #2B2220; }
+  .switch .label { overflow: hidden; text-overflow: ellipsis; }
+  .switch .label.bn { font-size: 14px; }
+  .icons { display: flex; gap: 16px; align-items: center; height: 28px; }
+  .icon-btn {
+    width: 28px; height: 28px; margin: 0 -4px; border-radius: 6px;
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--box); }
+  .icon-btn.close:hover { background: #C42B1C; }
+  svg.i { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 1.2;
+          stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+  /* Menus: the bar's own look. */
+  .menu {
+    position: fixed; min-width: 220px; padding: 6px;
+    background: var(--bar); border: 1px solid var(--box-border); border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.45);
+    font-size: 14px; display: none; z-index: 10;
+  }
+  .menu.open { display: block; }
+  .item {
+    height: 32px; padding: 0 10px; border-radius: 6px;
+    display: flex; align-items: center; gap: 10px; cursor: pointer; white-space: nowrap;
+  }
+  .item:hover { background: var(--box); }
+  .item .text { flex: 1; }
+  .item .key { color: var(--dim); font-size: 12px; margin-left: 16px; }
+  .item .slot { width: 16px; height: 16px; flex: none; }
+  .item .slot svg.i { width: 16px; height: 16px; stroke-width: 1.5; }
+  .item.danger:hover { background: #3A1410; }
+  .sep { height: 1px; background: var(--box-border); margin: 6px 4px; }
+  .item.has-sub { position: relative; }
+  .item.has-sub > .menu { left: calc(100% + 6px); top: -7px; position: absolute; }
+  .item.has-sub:hover > .menu { display: block; }
+
+  /* A taskbar with the tray icon, for the tray part. */
+  .taskbar {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 48px;
+    background: rgba(32,32,32,.92); display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 120px; gap: 6px;
+  }
+  .tray { width: 40px; height: 40px; border-radius: 6px; display: grid; place-items: center; cursor: pointer; }
+  .tray:hover { background: rgba(255,255,255,.08); }
+  .tray svg { width: 22px; height: 22px; }
+  .clock { color: #fff; font: 12px/1.3 "Segoe UI", sans-serif; text-align: right; margin-left: 8px; }
+  .toast {
+    position: fixed; top: 76px; right: 220px; width: 378px; text-align: center;
+    font-size: 13px; color: #fff; opacity: 0; transition: opacity .2s;
+  }
+  .toast.show { opacity: .85; }
+</style>
+</head>
+<body>
+
+<!-- Lucide icons (24 viewBox, drawn at 20px with a 1px stroke) and the নু logo. -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="nu-on" x1="1.761" y1="20.8" x2="35.665" y2="3.782" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D13A0E"/><stop offset="1" stop-color="#E87A1E"/>
+    </linearGradient>
+    <linearGradient id="nu-off" x1="1.761" y1="20.8" x2="35.665" y2="3.782" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5E5A59"/><stop offset="1" stop-color="#7D7978"/>
+    </linearGradient>
+    <symbol id="nu-glyph" viewBox="0 0 37 28">
+      <path transform="translate(10 4.989)" fill="#fff" fill-opacity=".9" d="M10.541 13.665L9.372 12.773C9.33 12.277 9.245 11.749 9.117 11.189C8.99 10.63 8.82 10.084 8.607 9.553C8.395 9.022 8.147 8.543 7.863 8.118C7.58 7.693 7.254 7.35 6.886 7.088C6.517 6.826 6.121 6.694 5.696 6.694C5.54 6.694 5.38 6.712 5.217 6.748C5.055 6.783 4.916 6.836 4.803 6.907L5.419 5.802C5.632 5.944 5.788 6.142 5.887 6.397C5.986 6.652 6.036 6.907 6.036 7.162C6.036 7.559 5.951 7.916 5.781 8.235C5.611 8.554 5.366 8.806 5.047 8.99C4.729 9.174 4.328 9.266 3.847 9.266C3.039 9.266 2.423 9.025 1.998 8.543C1.573 8.062 1.36 7.452 1.36 6.716C1.36 5.894 1.622 5.256 2.146 4.803C2.671 4.35 3.351 4.123 4.187 4.123C4.81 4.123 5.387 4.233 5.919 4.452C6.45 4.672 6.921 4.977 7.332 5.366C7.743 5.756 8.104 6.202 8.416 6.705C8.728 7.208 8.983 7.739 9.181 8.299C9.379 8.859 9.514 9.415 9.585 9.967L9.287 9.989C9.273 9.705 9.248 9.326 9.213 8.852C9.177 8.377 9.146 7.87 9.117 7.332C9.089 6.794 9.075 6.305 9.075 5.866L9.075 1.36L0.829 1.36L0 0L12.263 0L13.091 1.36L10.69 1.36L10.69 13.644L10.541 13.665ZM4.608 14.877C4.608 14.154 4.873 13.563 5.405 13.102C5.936 12.642 6.69 12.411 7.668 12.411C8.461 12.411 9.223 12.553 9.953 12.836C10.682 13.12 11.362 13.502 11.993 13.984C12.623 14.466 13.194 15.008 13.704 15.61C14.214 16.212 14.646 16.839 15 17.491L14.192 18.022C13.64 17.186 13.027 16.463 12.354 15.854C11.681 15.245 10.934 14.77 10.112 14.43C9.29 14.09 8.391 13.92 7.413 13.92C6.917 13.92 6.559 14.002 6.34 14.165C6.12 14.328 6.01 14.551 6.01 14.834C6.01 15.117 6.117 15.348 6.329 15.525C6.542 15.702 6.846 15.79 7.243 15.79C7.625 15.79 7.965 15.702 8.263 15.525C8.561 15.348 8.798 15.061 8.975 14.664C9.152 14.267 9.241 13.736 9.241 13.07L10.686 13.772C10.686 14.437 10.558 15.043 10.303 15.589C10.048 16.134 9.673 16.57 9.177 16.896C8.681 17.221 8.072 17.384 7.349 17.384C6.556 17.384 5.9 17.151 5.383 16.683C4.866 16.216 4.608 15.613 4.608 14.877Z"/>
+      <circle cx="25.5" cy="17.489" r="1.5" fill="#fff" fill-opacity=".9"/>
+    </symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-badge-help" viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+    <!-- To the tray: the designed bar-over-triangle (an eject sign upside down), in 20px units. -->
+    <symbol id="i-to-tray" viewBox="0 0 20 20"><rect x="2.5" y="2.5" width="15" height="3.33" rx=".83"/><path d="M2.5 9.17h15L10 17.5Z"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+    <symbol id="i-panel-top" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+    <symbol id="i-log-out" viewBox="0 0 24 24"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></symbol>
+  </defs>
+</svg>
+
+<div class="bar" id="bar">
+  <div class="left">
+    <svg class="logo" viewBox="0 0 37 28" id="logo" title="টেনে সরান · ক্লিক: বাংলা চালু/বন্ধ">
+      <rect width="37" height="28" rx="6" fill="url(#nu-on)"/>
+      <use href="#nu-glyph"/>
+    </svg>
+    <div class="switch" id="switch">
+      <span class="label" id="label">English</span>
+      <svg class="i"><use href="#i-chevron-down"/></svg>
+    </div>
+  </div>
+  <div class="icons">
+    <div class="icon-btn" id="btn-settings" title="সেটিংস"><svg class="i"><use href="#i-settings"/></svg></div>
+    <div class="icon-btn" id="btn-help" title="সাহায্য"><svg class="i"><use href="#i-info"/></svg></div>
+    <div class="icon-btn" id="btn-tray" title="সিস্টেম ট্রেতে পাঠান"><svg class="i" viewBox="0 0 20 20"><use href="#i-to-tray"/></svg></div>
+    <div class="icon-btn close" id="btn-close" title="বন্ধ"><svg class="i"><use href="#i-x"/></svg></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- Layout menu (the switch) -->
+<div class="menu" id="menu-layout">
+  <div class="item" data-mode="en"><span class="slot" data-check="en"></span><span class="text">English</span></div>
+  <div class="item" data-mode="bijoy"><span class="slot" data-check="bijoy"></span><span class="text">বাংলা · বিজয়</span></div>
+  <div class="item" data-mode="phonetic"><span class="slot" data-check="phonetic"></span><span class="text">বাংলা · ফোনেটিক</span></div>
+</div>
+
+<!-- Help menu (?) -->
+<div class="menu" id="menu-help">
+  <div class="item" data-act="note"><span class="slot"><svg class="i"><use href="#i-book"/></svg></span><span class="text">ব্যবহারের নির্দেশিকা</span></div>
+  <div class="item" data-act="note"><span class="slot"><svg class="i"><use href="#i-globe"/></svg></span><span class="text">ওয়েবসাইটে যান</span></div>
+  <div class="sep"></div>
+  <div class="item" data-act="note"><span class="slot"><svg class="i"><use href="#i-info"/></svg></span><span class="text">নুকতা বাংলা সম্পর্কে</span></div>
+</div>
+
+<!-- Close menu (✕) -->
+<div class="menu" id="menu-close">
+  <div class="item" data-act="to-tray"><span class="slot"><svg class="i" viewBox="0 0 20 20"><use href="#i-to-tray"/></svg></span><span class="text">সিস্টেম ট্রেতে পাঠান</span></div>
+  <div class="sep"></div>
+  <div class="item danger" data-act="exit"><span class="slot"><svg class="i"><use href="#i-log-out"/></svg></span><span class="text">বন্ধ করুন</span></div>
+</div>
+
+<!-- Tray menu (right-click on the tray icon) -->
+<div class="menu" id="menu-tray">
+  <div class="item" data-act="toggle"><span class="slot"><svg class="i"><use href="#i-power"/></svg></span><span class="text" id="tray-toggle-text">বাংলা চালু করুন</span><span class="key">F12</span></div>
+  <div class="item" data-act="bar"><span class="slot"><svg class="i"><use href="#i-panel-top"/></svg></span><span class="text" id="tray-bar-text">টপ বার লুকান</span></div>
+  <div class="sep"></div>
+  <div class="item has-sub"><span class="slot"><svg class="i"><use href="#i-keyboard"/></svg></span><span class="text">কীবোর্ড লেআউট</span><span class="slot"><svg class="i"><use href="#i-chevron-right"/></svg></span>
+    <div class="menu">
+      <div class="item" data-mode="en"><span class="slot" data-check="en"></span><span class="text">English</span></div>
+      <div class="item" data-mode="bijoy"><span class="slot" data-check="bijoy"></span><span class="text">বাংলা · বিজয়</span></div>
+      <div class="item" data-mode="phonetic"><span class="slot" data-check="phonetic"></span><span class="text">বাংলা · ফোনেটিক</span></div>
+    </div>
+  </div>
+  <div class="item" data-act="note"><span class="slot"><svg class="i"><use href="#i-settings"/></svg></span><span class="text">সেটিংস…</span></div>
+  <div class="item has-sub"><span class="slot"><svg class="i"><use href="#i-info"/></svg></span><span class="text">সাহায্য</span><span class="slot"><svg class="i"><use href="#i-chevron-right"/></svg></span>
+    <div class="menu">
+      <div class="item" data-act="note"><span class="slot"><svg class="i"><use href="#i-book"/></svg></span><span class="text">ব্যবহারের নির্দেশিকা</span></div>
+  <div class="item" data-act="note"><span class="slot"><svg class="i"><use href="#i-globe"/></svg></span><span class="text">ওয়েবসাইটে যান</span></div>
+      <div class="sep"></div>
+      <div class="item" data-act="note"><span class="slot"><svg class="i"><use href="#i-info"/></svg></span><span class="text">নুকতা বাংলা সম্পর্কে</span></div>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <div class="item danger" data-act="exit"><span class="slot"><svg class="i"><use href="#i-log-out"/></svg></span><span class="text">বন্ধ করুন</span></div>
+</div>
+
+<div class="taskbar">
+  <div class="tray" id="tray" title="নুকতা বাংলা">
+    <svg viewBox="0 0 32 32" id="tray-on" style="display:none">
+      <defs><linearGradient id="tray-grad" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#D13A0E"/><stop offset="1" stop-color="#E87A1E"/></linearGradient></defs>
+      <rect width="32" height="32" rx="7" fill="url(#tray-grad)"/>
+      <svg x="-4.6" y="1.4" width="41" height="31" viewBox="0 0 37 28"><use href="#nu-glyph"/></svg>
+    </svg>
+    <svg viewBox="0 0 32 32" id="tray-off">
+      <rect x=".5" y=".5" width="31" height="31" rx="6.5" fill="#0D0807" stroke="#4A413F"/>
+      <text x="16" y="16.5" text-anchor="middle" dominant-baseline="middle" fill="#fff" fill-opacity=".9" font-family="Segoe UI" font-weight="600" font-size="12.8">EN</text>
+    </svg>
+  </div>
+  <div class="clock">১:২৫ PM<br>২৬/১০/২০২৬</div>
+</div>
+
+<div class="note">
+  <b>নুকতা বাংলা: top bar preview</b> (a mock-up in the browser; the Windows app is drawn natively to match).<br>
+  • Click the <b>switch</b>: layout menu &nbsp;• Click the <b>নু logo</b> or press <b>F12</b>: Bangla on/off, with the beep<br>
+  • <b>?</b> help &nbsp;• <b>⏏</b> send to tray &nbsp;• <b>✕</b> tray or exit &nbsp;• Drag the bar by the logo<br>
+  • Tray icon (bottom right): <b>click</b> toggles (black EN = off, orange নু = on), <b>double-click</b> brings the bar back to its default spot, <b>right-click</b> opens its menu<br>
+  <button id="f12">Simulate F12</button>
+</div>
+
+<script>
+  const state = { mode: "en", layout: "bijoy", barVisible: true };
+  const labels = { en: "English", bijoy: "বাংলা · বিজয়", phonetic: "বাংলা · ফোনেটিক" };
+  const $ = (id) => document.getElementById(id);
+  const CHECK = '<svg class="i"><use href="#i-check"/></svg>';
+
+  function render() {
+    const label = $("label");
+    label.textContent = labels[state.mode];
+    label.classList.toggle("bn", state.mode !== "en");
+    document.querySelectorAll("[data-check]").forEach((slot) => {
+      slot.innerHTML = slot.dataset.check === state.mode ? CHECK : "";
+    });
+    $("tray-on").style.display = state.mode === "en" ? "none" : "block";
+    $("tray-off").style.display = state.mode === "en" ? "block" : "none";
+    $("tray").title = "নুকতা বাংলা: " + labels[state.mode] + " — ক্লিক বা F12: চালু/বন্ধ";
+    $("tray-toggle-text").textContent = state.mode === "en" ? "বাংলা চালু করুন" : "English-এ যান";
+    $("tray-bar-text").textContent = state.barVisible ? "টপ বার লুকান" : "টপ বার দেখান";
+    $("bar").style.display = state.barVisible ? "flex" : "none";
+  }
+
+  // The beep: the same one the app plays. 70 ms, higher (C6) for on, lower (G5) for off,
+  // 3 ms fade-in and 25 ms fade-out so it never clicks.
+  let audio;
+  function beep(on) {
+    audio = audio || new AudioContext();
+    const f = on ? 1046.5 : 784, t = audio.currentTime, length = 0.070;
+    [[f, 0.25], [f * 2, 0.25 * 0.15]].forEach(([freq, amp]) => {
+      const osc = audio.createOscillator(), gain = audio.createGain();
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(amp, t + 0.003);
+      gain.gain.setValueAtTime(amp, t + length - 0.025);
+      gain.gain.linearRampToValueAtTime(0, t + length);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t); osc.stop(t + length + 0.01);
+    });
+  }
+
+  function setMode(mode) {
+    const wasOn = state.mode !== "en";
+    if (mode !== "en") state.layout = mode;
+    state.mode = mode;
+    const on = mode !== "en";
+    if (on !== wasOn) beep(on);
+    render();
+  }
+  function toggle() { setMode(state.mode === "en" ? state.layout : "en"); toast(state.mode === "en" ? "English" : labels[state.mode]); }
+
+  let toastTimer;
+  function toast(text) {
+    const t = $("toast"); t.textContent = text; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 900);
+  }
+
+  function closeMenus() { document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open")); }
+  function openMenu(id, x, y, alignRight) {
+    closeMenus();
+    const m = $(id); m.classList.add("open");
+    const w = m.offsetWidth, h = m.offsetHeight;
+    let left = alignRight ? x - w : x, top = y;
+    if (top + h > innerHeight - 8) top = y - h;
+    m.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + "px";
+    m.style.top = Math.max(8, top) + "px";
+  }
+  function under(el, id, alignRight) {
+    // A second click on the same button closes its menu.
+    if ($(id).classList.contains("open")) { closeMenus(); return; }
+    const r = el.getBoundingClientRect();
+    openMenu(id, alignRight ? r.right : r.left, r.bottom + 6, alignRight);
+  }
+
+  $("switch").onclick = (e) => { e.stopPropagation(); under($("switch"), "menu-layout"); };
+  $("btn-help").onclick = (e) => { e.stopPropagation(); under($("btn-help"), "menu-help", true); };
+  $("btn-close").onclick = (e) => { e.stopPropagation(); under($("btn-close"), "menu-close", true); };
+  $("btn-tray").onclick = () => { state.barVisible = false; render(); };
+  $("btn-settings").onclick = () => toast("সেটিংস উইন্ডো খুলবে");
+  $("f12").onclick = toggle;
+  let clickTimer = null;
+  $("tray").onclick = () => {
+    closeMenus();
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(toggle, 400);
+  };
+  $("tray").ondblclick = () => {
+    clearTimeout(clickTimer);
+    const bar = $("bar");
+    bar.style.left = ""; bar.style.top = ""; bar.style.right = "";
+    state.barVisible = true; render();
+    toast("টপ বার আগের জায়গায় ফিরে এসেছে");
+  };
+  $("tray").oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); openMenu("menu-tray", e.clientX, e.clientY - 4, true); };
+
+  document.querySelectorAll(".menu .item").forEach((item) => {
+    item.addEventListener("click", (e) => {
+      if (item.classList.contains("has-sub")) { e.stopPropagation(); return; }
+      e.stopPropagation();
+      const { mode, act } = item.dataset;
+      if (mode) setMode(mode);
+      if (act === "toggle") toggle();
+      if (act === "to-tray") { state.barVisible = false; render(); }
+      if (act === "bar") { state.barVisible = !state.barVisible; render(); }
+      if (act === "exit") { setMode("en"); state.barVisible = false; render(); toast(""); alert("বন্ধ হলো: বার আর ট্রে আইকন সরে যাবে। F12 চাপলে আবার চালু হবে।"); state.barVisible = true; render(); }
+      if (act === "note") toast(item.textContent.trim());
+      closeMenus();
+    });
+  });
+  document.addEventListener("click", closeMenus);
+  document.addEventListener("keydown", (e) => { if (e.key === "F12") { e.preventDefault(); toggle(); } if (e.key === "Escape") closeMenus(); });
+
+  // Drag by the logo.
+  let drag = null;
+  $("logo").addEventListener("mousedown", (e) => {
+    const r = $("bar").getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false }; e.preventDefault();
+  });
+  addEventListener("mousemove", (e) => {
+    if (!drag) return; drag.moved = true;
+    const bar = $("bar"); bar.style.right = "auto";
+    bar.style.left = (e.clientX - drag.dx) + "px"; bar.style.top = (e.clientY - drag.dy) + "px";
+  });
+  addEventListener("mouseup", (e) => {
+    if (drag && !drag.moved && e.target.closest("#logo")) toggle();
+    drag = null;
+  });
+
+  render();
+</script>
+</body>
+</html>

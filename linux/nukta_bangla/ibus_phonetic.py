@@ -15,7 +15,7 @@ import gi
 gi.require_version("IBus", "1.0")
 from gi.repository import IBus  # noqa: E402
 
-from . import ibus_engine  # noqa: E402
+from . import ibus_engine, updates  # noqa: E402
 from .phonetic import Key, PhoneticComposer  # noqa: E402
 from .riti import RitiUnavailable  # noqa: E402
 from .settings import Settings, data_directory  # noqa: E402
@@ -197,13 +197,14 @@ class NuktaBanglaPhoneticEngine(ibus_engine.LayoutMenu, IBus.Engine):
         session.composer.discard()
         self._clear()
         self.register_properties(self.layout_properties())
+        updates.check_if_due()
 
     def do_focus_in_id(self, object_path, client):  # ibus 1.5.27+
         self.do_focus_in()
 
     def do_property_activate(self, name, state):
         # In the engine's own body, not the mixin's: see `ibus_engine.LayoutMenu`.
-        self.switch_layout(name, state)
+        self.menu_activate(name, state)
 
     def do_focus_out(self):
         self._flush()

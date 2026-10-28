@@ -103,6 +103,15 @@ final class EngineTests: XCTestCase {
         ("hZfQj", "ব্যাংক"),
         ("gCjZ", "ঐক্য"),
         ("vZfh", "র\u{200D}\u{09CD}যাব"),
+        // A phala after a kar still joins the consonant: ্য/্র then ু, or ু then ্য/্র.
+        ("tZsv", "ট্যুর"),
+        ("tsZv", "ট্যুর"),
+        ("jsz", "ক্রু"),
+        ("ozfm", "গ্রাম"),
+        ("ofzm", "গ্রাম"),
+        ("cjfZ", "ক্যো"),
+        // After ং ঃ ঁ or a visible hasanta it doesn't: those end the syllable.
+        ("jQZ", "কং্য"),
         // reph
         ("mA", "র্ম"),
         ("jmA", "কর্ম"),
@@ -273,6 +282,23 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(next.display, "ব")
     }
 
+    /// অ (Shift+F) is on screen as soon as it is typed, not only after the next key; an f still
+    /// makes it আ.
+    func testAShowsAtOnce() {
+        var e = Engine()
+        var out = e.process(character: "F")!
+        XCTAssertEqual(out.committed, "")
+        XCTAssertEqual(out.visible, "অ")
+        out = e.process(character: "f")!
+        XCTAssertEqual(out.committed, "আ")
+        XCTAssertEqual(out.visible, "")
+        e = Engine()
+        _ = e.process(character: "F")
+        out = e.process(character: "j")!
+        XCTAssertEqual(out.committed, "অ")
+        XCTAssertEqual(out.visible, "ক")
+    }
+
     func testNonBijoyKeysReturnNil() {
         let e = Engine()
         XCTAssertNil(e.process(character: " "))
@@ -289,7 +315,7 @@ final class EngineTests: XCTestCase {
             "dj", "jd", "cj", "jc", "Cj",
             "dhuW", "hduW",  // বিজয়
             "hfQVfclM", "hfQVflcM",  // বাংলাদেশ
-            "Ff", "Ffmd", "gd", "gx", "jgd",
+            "gd", "gx", "jgd",
             "cnf&", "jVcu", "mbc",
             "crX&Yfcbf",  // পৌঁছানো
             "gfmfv ncfbfv hfQVf",
@@ -309,6 +335,15 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(typeWithEdits("mA").rewrites, 1)
         XCTAssertEqual(typeWithEdits("mA").doc, "র্ম")
         XCTAssertEqual(typeWithEdits("djgk").doc, "ক্তি")
+    }
+
+    /// অ is on screen as soon as Shift+F is typed, so f turns it into আ with one rewrite
+    /// (checked by hand in Facebook and Messenger).
+    func testAToAaRewritesOnce() {
+        XCTAssertEqual(typeWithEdits("Ff").rewrites, 1)
+        XCTAssertEqual(typeWithEdits("Ff").doc, "আ")
+        XCTAssertEqual(typeWithEdits("Ffmd").rewrites, 1)
+        XCTAssertEqual(typeWithEdits("Ffmd").doc, "আমি")
     }
 
     func testTextDiff() {

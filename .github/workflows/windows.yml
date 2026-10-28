@@ -1,0 +1,32 @@
+# Builds and tests নুকতা বাংলা for Windows, and keeps the installer as a download on each run.
+name: Windows
+
+on:
+  # Only main: a direct push or a merged pull request. Other branches never run it.
+  push:
+    branches: [main]
+    paths: ["windows/**", "riti-bridge/**", "Licenses/**", ".github/workflows/windows.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build, test and package
+        shell: pwsh
+        run: |
+          # dumpbin, for build.ps1's check of the DLL's exports.
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $tools = Get-ChildItem "$vs\VC\Tools\MSVC" | Sort-Object Name | Select-Object -Last 1
+          $env:PATH = "$($tools.FullName)\bin\Hostx64\x64;$env:PATH"
+          ./windows/build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NuktaBangla-Setup
+          path: build/windows/NuktaBangla-Setup.exe

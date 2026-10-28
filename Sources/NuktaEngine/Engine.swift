@@ -127,7 +127,7 @@ public final class Engine {
             }
 
         case .phala(let p):
-            if syllable.hasCluster && !syllable.isClusterClosed {
+            if syllable.acceptsPhala {
                 if syllable.lastIsHasanta { syllable.removeLast() }
                 syllable.append(.phala(p))
             } else {

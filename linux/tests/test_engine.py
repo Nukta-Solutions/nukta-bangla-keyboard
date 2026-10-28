@@ -71,6 +71,15 @@ CASES = [
     ("hZfQj", "ব্যাংক"),
     ("gCjZ", "ঐক্য"),
     ("vZfh", "র‍্যাব"),
+    # A phala after a kar still joins the consonant: ্য/্র then ু, or ু then ্য/্র.
+    ("tZsv", "ট্যুর"),
+    ("tsZv", "ট্যুর"),
+    ("jsz", "ক্রু"),
+    ("ozfm", "গ্রাম"),
+    ("ofzm", "গ্রাম"),
+    ("cjfZ", "ক্যো"),
+    # After ং ঃ ঁ or a visible hasanta it doesn't: those end the syllable.
+    ("jQZ", "কং্য"),
     # reph
     ("mA", "র্ম"),
     ("jmA", "কর্ম"),
@@ -223,6 +232,18 @@ class EngineTests(unittest.TestCase):
         nxt = e.process_character("h")
         self.assertEqual(nxt.committed, "ক্তি")
         self.assertEqual(nxt.display, "ব")
+
+    def test_a_shows_at_once(self):
+        # অ (Shift+F) is on screen as soon as it is typed; an f still makes it আ.
+        e = Engine()
+        out = e.process_character("F")
+        self.assertEqual((out.committed, out.visible), ("", "অ"))
+        out = e.process_character("f")
+        self.assertEqual((out.committed, out.visible), ("আ", ""))
+        e = Engine()
+        e.process_character("F")
+        out = e.process_character("j")
+        self.assertEqual((out.committed, out.visible), ("অ", "ক"))
 
     def test_non_bijoy_keys_return_none(self):
         e = Engine()

@@ -1,0 +1,29 @@
+// Resources compiled into the programs (NuktaBangla.exe, NuktaBanglaSettings.exe) by build.rs: the
+// logo as their icon (make-artwork.ps1 draws it), and the name Explorer shows in Properties.
+#pragma code_page(65001)
+
+1 ICON "nukta-bangla.ico"
+
+1 VERSIONINFO
+FILEVERSION     NUKTA_VERSION_COMMA
+PRODUCTVERSION  NUKTA_VERSION_COMMA
+FILEOS          0x40004
+FILETYPE        0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName",      "Nukta Solutions"
+      VALUE "FileDescription",  "নুকতা বাংলা"
+      VALUE "ProductName",      "নুকতা বাংলা"
+      VALUE "FileVersion",      NUKTA_VERSION_TEXT
+      VALUE "ProductVersion",   NUKTA_VERSION_TEXT
+      VALUE "LegalCopyright",   "© 2026 Nukta Solutions"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

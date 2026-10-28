@@ -141,7 +141,7 @@ class Engine:
                 self._committed += "র" + HASANTA
 
         elif kind == "phala":
-            if syllable.has_cluster and not syllable.is_cluster_closed:
+            if syllable.accepts_phala:
                 if syllable.last_is_hasanta:
                     syllable.remove_last()
                 syllable.append(("phala", key[1]))

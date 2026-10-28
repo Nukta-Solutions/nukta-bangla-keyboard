@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 riti-bridge/target/
 riti-bridge/lib/
+windows/target/
+.vscode/

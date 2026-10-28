@@ -4,7 +4,7 @@
 # without a Gatekeeper warning.
 #
 # Notarization uses the keychain profile in $NOTARY_PROFILE (default "nukta"). Create it once with
-#   xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id Y2466L4CFL
+#   xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id <Team ID>
 # and an app-specific password from account.apple.com. --no-notarize skips it for a quick test build.
 set -euo pipefail
 cd "$(dirname "$0")/.."

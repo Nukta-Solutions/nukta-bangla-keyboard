@@ -28,12 +28,17 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/NuktaBangla"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/icon.tiff Resources/AppIcon.icns "$APP/Contents/Resources/"
+# The brand's Bangla font, for the app's own windows and suggestion list only: registered by the
+# app for itself (Fonts.swift), never installed in macOS.
+mkdir -p "$APP/Contents/Resources/Fonts"
+cp windows/assets/fonts/NotoSerifBengali.ttf "$APP/Contents/Resources/Fonts/"
 
 # MPL 2.0 asks that every copy of the app says where riti's source is: here it ships inside the
 # app, with the licences of the Rust crates riti uses.
 LICENSES="$APP/Contents/Resources/Licenses"
 mkdir -p "$LICENSES"
 cp Licenses/MPL-2.0.txt Licenses/THIRD-PARTY-NOTICES.txt "$LICENSES/"
+cp windows/assets/fonts/OFL.txt "$LICENSES/OFL-NotoSerifBengali.txt"
 zip -qr -X "$LICENSES/MPL-source.zip" riti-bridge/riti riti-bridge/riti.patch -x '*.DS_Store'
 
 if [ -n "$RELEASE" ]; then

@@ -60,6 +60,12 @@ enum Settings {
         set { set("popupDirection", newValue.rawValue) }
     }
 
+    /// Look for a new version once a day (Updates.swift).
+    static var autoUpdateCheck: Bool {
+        get { bool("autoUpdateCheck") }
+        set { set("autoUpdateCheck", newValue) }
+    }
+
     static var phoneticOptions: PhoneticOptions {
         var options = PhoneticOptions()
         options.mode = typingMode

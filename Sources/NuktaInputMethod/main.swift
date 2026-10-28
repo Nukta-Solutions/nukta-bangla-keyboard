@@ -5,6 +5,7 @@ let connectionName = Bundle.main.infoDictionary?["InputMethodConnectionName"] as
     ?? "com.nuktasolutions.inputmethod.NuktaBangla_Connection"
 
 Settings.migrateFromOldBundleID()
+Fonts.register()
 
 // Kept alive for the lifetime of the process.
 let server = IMKServer(name: connectionName, bundleIdentifier: Bundle.main.bundleIdentifier)

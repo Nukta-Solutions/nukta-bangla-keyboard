@@ -88,7 +88,7 @@ private final class CandidateListView: NSView {
     private static let padding: CGFloat = 6
     private static let cellPadding = NSSize(width: 8, height: 3)
     private static let cornerRadius: CGFloat = 8
-    private static let wordFont = NSFont.systemFont(ofSize: 16)
+    private static let wordFont = Fonts.ui(16)
     private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
     private static let auxiliaryFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
 

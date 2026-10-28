@@ -1,13 +1,16 @@
 # নুকতা বাংলা (Nukta Bangla)
 
 The classic Bijoy keyboard layout as a native input method with Unicode output: an InputMethodKit
-input method on macOS, an IBus engine on Linux. Same keys, same rules, same output on both.
+input method on macOS, an IBus engine on Linux, a TSF text service on Windows. Same keys, same rules,
+same output on all three.
 
-Both platforms also do Avro-style phonetic typing with dictionary suggestions, from the same engine and
+All three also do Avro-style phonetic typing with dictionary suggestions, from the same engine and
 with the same settings. On macOS, pick the layout from the নু menu in the menu bar: **বিজয় লেআউট** or
 **ফোনেটিক** — the choice applies to every app and is remembered, and **সেটিংস…** in the same menu has
 the rest. On Linux the two layouts are separate input sources, switched with Super+Space, and the
-settings are a small JSON file — see [linux/README.md](linux/README.md).
+settings are a small JSON file — see [linux/README.md](linux/README.md). On Windows both are in one
+keyboard: click the **বি** / **ফ** indicator in the taskbar to switch, right-click it for the menu — see
+[windows/README.md](windows/README.md).
 
 ## Install on macOS
 ```
@@ -31,6 +34,12 @@ Super+Space. It needs IBus and `python3-gi`, and phonetic typing needs riti as a
 which the self-extracting installer carries and `install.sh` offers to build from a clone.
 [linux/README.md](linux/README.md) has the per-distro packages, the phonetic settings file, the
 non-GNOME desktop setup, the no-root install and how the Linux port works.
+
+## Install on Windows
+Run `NuktaBangla-Setup.exe` (built by `windows\build.ps1`, or downloaded from the `Windows`
+GitHub workflow's run). It adds **নুকতা বাংলা** to your keyboards; switch to it with Win+Space.
+Windows 10 and 11, 64-bit and 32-bit. [windows/README.md](windows/README.md) has the details and how the
+Windows port works.
 
 ## Typing (Avro 4.5.1 style: the default)
 Classic Bijoy order works as always. As in Avro, a pre-base kar (ি ে ৈ) **pressed twice** right after a
@@ -133,9 +142,95 @@ and the .dmg and staples their tickets, so it installs with no Gatekeeper warnin
 - the **Developer ID Application** and **Developer ID Installer** certificates
   (Xcode → Settings → Accounts → Manage Certificates);
 - a notarytool profile named `nukta`, created once with an app-specific password from account.apple.com:
-  `xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id Y2466L4CFL`.
+  `xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id <Team ID>`.
 
 `scripts/package.sh --no-notarize` makes a signed but un-notarized .pkg and .dmg for a quick test.
+
+On Windows, `windows\build.ps1` makes `build\windows\NuktaBangla-Setup.exe` (see
+[windows/README.md](windows/README.md)); the Windows workflow builds the same file on every push.
+
+## Releasing
+The website and README link to the newest release with fixed names, so **every release must carry all
+three files, named exactly**:
+
+| Platform | Asset | Permanent link |
+|---|---|---|
+| macOS | `NuktaBangla.dmg` | https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/latest/download/NuktaBangla.dmg |
+| Windows | `NuktaBangla-Setup.exe` | https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/latest/download/NuktaBangla-Setup.exe |
+| Linux | `nukta-bangla-linux.sh` | https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/latest/download/nukta-bangla-linux.sh |
+
+A release missing one of them breaks that platform's link until the next release, so never publish
+one without all three.
+
+Pushing a `v*` tag runs [.github/workflows/release.yml](.github/workflows/release.yml):
+1. Checks the tag is `v` + `CFBundleShortVersionString`, and that `linux/nukta_bangla/__init__.py` and
+   `windows/Cargo.toml` say the same version, and creates a draft release (or uses one you made by hand
+   with notes).
+2. On macOS, if the Apple secrets below are set, runs `scripts/package.sh` with the Developer ID
+   certificates and a notarytool profile set up from them, checks the DMG is signed, notarized and
+   stapled, and uploads it as `NuktaBangla.dmg`. Without the secrets this job is skipped (see below).
+3. On Ubuntu 22.04, builds riti, runs the Linux tests and `linux/package.sh`, and uploads
+   `nukta-bangla-linux.sh`.
+4. On Windows, runs `windows\build.ps1` (tests, both DLLs, the installer) and uploads
+   `NuktaBangla-Setup.exe`.
+5. Checks all three files are attached, publishes the release, then sets the version and sha256 in
+   [Nukta-Solutions/homebrew-tap](https://github.com/Nukta-Solutions/homebrew-tap)'s cask (skipped
+   until `HOMEBREW_TAP_TOKEN` is set).
+
+If any build, signing or notarization fails, the run fails and the release stays a draft with nothing
+public. Fix it and rerun the failed jobs (`gh run rerun <id> --failed`).
+
+```
+# bump CFBundleShortVersionString and CFBundleVersion in Resources/Info.plist, __version__ in
+# linux/nukta_bangla/__init__.py and version in windows/Cargo.toml; merge that to main, then:
+git switch main && git pull
+git tag v1.0.2 && git push origin v1.0.2
+gh run watch
+```
+
+**Signing the Mac build on your own Mac instead.** Until the Apple secrets are set, the workflow builds
+Windows and Linux into a draft and skips macOS. Then, on a Mac with both Developer ID certificates in
+the keychain and the `nukta` notarytool profile (see above):
+```
+git fetch --tags && git switch --detach v1.0.2
+scripts/release-mac.sh v1.0.2      # package.sh, upload NuktaBangla.dmg, publish once all three are there
+git switch -
+```
+The Homebrew cask is only updated by the workflow; with this route, bump it in
+[homebrew-tap](https://github.com/Nukta-Solutions/homebrew-tap) by hand.
+
+To build the Mac release in CI instead, set these repository secrets (Settings → Secrets and variables →
+Actions):
+
+| Secret | Value |
+|---|---|
+| `DEVELOPER_ID_APPLICATION_P12` | base64 of a .p12 export of the Developer ID Application certificate *with its private key* |
+| `DEVELOPER_ID_APPLICATION_P12_PASSWORD` | the password set on that export |
+| `DEVELOPER_ID_INSTALLER_P12` | the same for the Developer ID Installer certificate |
+| `DEVELOPER_ID_INSTALLER_P12_PASSWORD` | its export password |
+| `APP_STORE_CONNECT_API_KEY_P8` | the contents of an App Store Connect API key (`AuthKey_XXXXXXXXXX.p8`) |
+| `APP_STORE_CONNECT_KEY_ID` | that key's ID (the `XXXXXXXXXX`) |
+| `APP_STORE_CONNECT_ISSUER_ID` | the Issuer ID shown above the keys list |
+| `HOMEBREW_TAP_TOKEN` | optional: a fine-grained token with Contents: read and write on `Nukta-Solutions/homebrew-tap` only |
+
+To export a certificate: Keychain Access → login → My Certificates → right-click the certificate (it
+must show a key under it) → Export… → .p12, with a password. Then
+`base64 -i app.p12 | gh secret set DEVELOPER_ID_APPLICATION_P12` and delete the .p12. The API key comes from
+App Store Connect → Users and Access → Integrations → App Store Connect API → Team Keys → **+**, role
+Developer; it can be downloaded once. `gh secret set APP_STORE_CONNECT_API_KEY_P8 < AuthKey_XXXXXXXXXX.p8`.
+
+### The update notice
+Every installed copy asks GitHub for the latest release once a day (macOS: when you switch to the
+keyboard; Windows: the top bar; Linux: when a layout gets the focus) and, if its tag is a newer version
+than the installed one, shows the update dialog. So:
+- The tag must match the versions in Info.plist, `windows/Cargo.toml` and
+  `linux/nukta_bangla/__init__.py` (the release workflow checks this): a copy whose version is behind
+  the tag keeps being told to update.
+- In the release description, the lines starting with `- ` (at most five) are the dialog's
+  "নতুন যা আছে", shown as you write them, so write them in Bangla. Everything else (paragraphs,
+  headings, install steps) is only on the GitHub page. No bullet lines: the dialog has no notes box.
+- **ডাউনলোড** opens <https://www.nuktasolutions.com/nukta-bangla-keyboard>, so link the new release there.
+- Drafts and pre-releases are never offered: a release only reaches users once it is published.
 
 ## Development
 Needs Rust for riti: `curl https://sh.rustup.rs -sSf | sh` (once).

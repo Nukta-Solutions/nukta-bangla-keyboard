@@ -6,7 +6,8 @@
 The keys are the ones the macOS build stores, with the same names and values, so one description of
 the settings covers both platforms (linux/README.md lists them). The file is read when the engine
 starts and re-read whenever it changes, so an edit takes effect on the next focus change — there is
-no settings window on Linux.
+no settings window on Linux. The one key the engine writes itself is ``autoUpdateCheck``, switched
+from the layout menu.
 
 What riti and the pick memory learn lives in ``~/.local/share/nukta-bangla``.
 """
@@ -23,6 +24,7 @@ DEFAULTS = {
     "englishWord": True,
     "colonIsBisarga": False,
     "popupDirection": "vertical",       # vertical | horizontal (the suggestion list)
+    "autoUpdateCheck": True,            # look for a new version once a day (updates.py)
 }
 
 _MODES = ("phoneticFirst", "smart", "phoneticOnly")
@@ -103,6 +105,15 @@ class Settings:
     def horizontal_popup(self):
         return self.popup_direction == "horizontal"
 
+    @property
+    def auto_update_check(self):
+        return self._flag("autoUpdateCheck")
+
+    def set_auto_update_check(self, on):
+        """Writes the one key the engine changes itself. The rest of the file, keys this version
+        doesn't know included, is kept as it is."""
+        self._write("autoUpdateCheck", bool(on))
+
     def phonetic_options(self):
         """These settings as the composer's options."""
         from .phonetic import PhoneticOptions
@@ -119,6 +130,19 @@ class Settings:
         except (OSError, ValueError):
             return {}
         return loaded if isinstance(loaded, dict) else {}
+
+    def _write(self, key, value):
+        values = self._read()
+        values[key] = value
+        try:
+            os.makedirs(os.path.dirname(self._path), exist_ok=True)
+            temporary = f"{self._path}.{os.getpid()}.tmp"
+            with open(temporary, "w", encoding="utf-8") as handle:
+                json.dump(values, handle, ensure_ascii=False, indent=2)
+            os.replace(temporary, self._path)
+        except OSError:
+            return
+        self.reload()
 
     def _mtime(self):
         try:

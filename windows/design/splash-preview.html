@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nukta Bangla Splash</title>
+<style>
+  /* Bangla in Noto Serif Bengali (bundled with the app), everything else in Aptos / Segoe UI. */
+  @font-face {
+    font-family: "Nukta Bengali";
+    src: url("../assets/fonts/NotoSerifBengali.ttf") format("truetype");
+    font-weight: 100 900;
+    unicode-range: U+0980-09FF, U+200C-200D, U+25CC, U+0964-0965;
+  }
+  :root {
+    --bg: #0D0807;
+    --ink: rgba(255,255,255,.94);
+    --dim: rgba(255,255,255,.55);
+    --faint: rgba(255,255,255,.32);
+    --from: #D13A0E;
+    --to: #E87A1E;
+    --font: "Nukta Bengali", "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  /* A stand-in desktop, so the splash is seen as it will be: over whatever is on screen. */
+  body {
+    font-family: var(--font); color: var(--ink); overflow: hidden;
+    background: radial-gradient(ellipse at 30% 20%, #4B5D8A, #262B45 55%, #141623);
+    display: grid; place-items: center;
+  }
+
+  .splash {
+    position: relative; width: 560px; height: 320px; border-radius: 16px; overflow: hidden;
+    background: var(--bg);
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+    display: grid; grid-template-columns: 210px 1fr;
+    opacity: 0; transform: scale(.97);
+  }
+  .splash.show { animation: in .5s cubic-bezier(.2,.8,.2,1) forwards; }
+  .splash.hide { animation: out .45s ease-in forwards; }
+  @keyframes in { to { opacity: 1; transform: none; } }
+  @keyframes out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(.985); } }
+
+  /* Left: the brand panel, the logo glowing on a field of the alphabet. */
+  .brand {
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, #1A100C 0%, #120A08 100%);
+    border-right: 1px solid #2D2827;
+    display: grid; place-items: center;
+  }
+  .letters {
+    position: absolute; inset: -20px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-content: center;
+    font-size: 30px; line-height: 1.2; color: rgba(232,122,30,.07); transform: rotate(-12deg);
+    font-family: "Nukta Bengali", serif; user-select: none;
+  }
+  .glow { position: absolute; width: 260px; height: 260px; border-radius: 50%;
+          background: radial-gradient(closest-side, rgba(232,122,30,.35), rgba(209,58,14,.08) 60%, transparent); }
+  .logo { position: relative; width: 120px; height: 91px; filter: drop-shadow(0 10px 24px rgba(209,58,14,.45)); }
+
+  /* Right: name, words, progress. */
+  .text { padding: 34px 34px 26px 32px; display: flex; flex-direction: column; }
+  .eyebrow { font: 600 11px/1 "Aptos", "Segoe UI", sans-serif; letter-spacing: 2.4px; text-transform: uppercase; color: var(--to); }
+  h1 { margin: 14px 0 0; font-size: 38px; font-weight: 700; line-height: 1.25; letter-spacing: .2px; }
+  .tagline { margin: 8px 0 0; font-size: 16px; line-height: 1.6; color: var(--ink); opacity: .8; }
+  .layouts { display: flex; gap: 8px; margin-top: 16px; }
+  .layouts span { font-size: 12.5px; padding: 4px 11px; border-radius: 999px; background: #241C1A; border: 1px solid #2D2827; }
+  .spacer { flex: 1; }
+  .hint { font-size: 12.5px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  kbd { font: 600 11px "Aptos", "Segoe UI", sans-serif; background: #241C1A; border: 1px solid #2D2827; border-bottom-width: 2px;
+        border-radius: 5px; padding: 2px 7px; color: var(--ink); }
+  .progress { height: 3px; border-radius: 3px; background: #241C1A; overflow: hidden; margin-top: 14px; }
+  .progress i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--from), var(--to)); }
+  .splash.show .progress i { animation: load 2.2s .3s cubic-bezier(.4,0,.2,1) forwards; }
+  @keyframes load { to { width: 100%; } }
+  .foot { display: flex; justify-content: space-between; margin-top: 12px; font: 11px "Aptos", "Segoe UI", sans-serif; color: var(--faint); }
+
+  .controls { position: fixed; left: 16px; bottom: 16px; display: flex; gap: 8px; align-items: center;
+              font: 13px var(--font); color: #fff; background: rgba(0,0,0,.4); padding: 10px 12px; border-radius: 10px; }
+  .controls button { font: inherit; color: #fff; background: #241C1A; border: 1px solid #2D2827; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="nu-on" x1="1.761" y1="20.8" x2="35.665" y2="3.782" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D13A0E"/><stop offset="1" stop-color="#E87A1E"/>
+    </linearGradient>
+    <symbol id="logo" viewBox="0 0 37 28">
+      <rect width="37" height="28" rx="6" fill="url(#nu-on)"/>
+      <path transform="translate(10 4.989)" fill="#fff" fill-opacity=".92" d="M10.541 13.665L9.372 12.773C9.33 12.277 9.245 11.749 9.117 11.189C8.99 10.63 8.82 10.084 8.607 9.553C8.395 9.022 8.147 8.543 7.863 8.118C7.58 7.693 7.254 7.35 6.886 7.088C6.517 6.826 6.121 6.694 5.696 6.694C5.54 6.694 5.38 6.712 5.217 6.748C5.055 6.783 4.916 6.836 4.803 6.907L5.419 5.802C5.632 5.944 5.788 6.142 5.887 6.397C5.986 6.652 6.036 6.907 6.036 7.162C6.036 7.559 5.951 7.916 5.781 8.235C5.611 8.554 5.366 8.806 5.047 8.99C4.729 9.174 4.328 9.266 3.847 9.266C3.039 9.266 2.423 9.025 1.998 8.543C1.573 8.062 1.36 7.452 1.36 6.716C1.36 5.894 1.622 5.256 2.146 4.803C2.671 4.35 3.351 4.123 4.187 4.123C4.81 4.123 5.387 4.233 5.919 4.452C6.45 4.672 6.921 4.977 7.332 5.366C7.743 5.756 8.104 6.202 8.416 6.705C8.728 7.208 8.983 7.739 9.181 8.299C9.379 8.859 9.514 9.415 9.585 9.967L9.287 9.989C9.273 9.705 9.248 9.326 9.213 8.852C9.177 8.377 9.146 7.87 9.117 7.332C9.089 6.794 9.075 6.305 9.075 5.866L9.075 1.36L0.829 1.36L0 0L12.263 0L13.091 1.36L10.69 1.36L10.69 13.644L10.541 13.665ZM4.608 14.877C4.608 14.154 4.873 13.563 5.405 13.102C5.936 12.642 6.69 12.411 7.668 12.411C8.461 12.411 9.223 12.553 9.953 12.836C10.682 13.12 11.362 13.502 11.993 13.984C12.623 14.466 13.194 15.008 13.704 15.61C14.214 16.212 14.646 16.839 15 17.491L14.192 18.022C13.64 17.186 13.027 16.463 12.354 15.854C11.681 15.245 10.934 14.77 10.112 14.43C9.29 14.09 8.391 13.92 7.413 13.92C6.917 13.92 6.559 14.002 6.34 14.165C6.12 14.328 6.01 14.551 6.01 14.834C6.01 15.117 6.117 15.348 6.329 15.525C6.542 15.702 6.846 15.79 7.243 15.79C7.625 15.79 7.965 15.702 8.263 15.525C8.561 15.348 8.798 15.061 8.975 14.664C9.152 14.267 9.241 13.736 9.241 13.07L10.686 13.772C10.686 14.437 10.558 15.043 10.303 15.589C10.048 16.134 9.673 16.57 9.177 16.896C8.681 17.221 8.072 17.384 7.349 17.384C6.556 17.384 5.9 17.151 5.383 16.683C4.866 16.216 4.608 15.613 4.608 14.877Z"/>
+      <circle cx="25.5" cy="17.489" r="1.5" fill="#fff" fill-opacity=".92"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="splash" id="splash">
+  <div class="brand">
+    <div class="letters">অ আ ই ঈ উ ঊ ঋ এ ঐ ও ঔ ক খ গ ঘ ঙ চ ছ জ ঝ ঞ ট ঠ ড ঢ ণ ত থ দ ধ ন প ফ ব ভ ম য র ল শ ষ স হ ড় ঢ় য় ৎ ং ঃ ঁ অ আ ই ঈ উ ঊ ঋ এ ঐ ও ঔ ক খ গ ঘ ঙ চ ছ জ ঝ ঞ ট ঠ ড ঢ ণ ত থ দ ধ ন প ফ ব ভ ম য র ল শ ষ স হ</div>
+    <div class="glow"></div>
+    <svg class="logo" viewBox="0 0 37 28"><use href="#logo"/></svg>
+  </div>
+  <div class="text">
+    <div class="eyebrow">Nukta Bangla Keyboard</div>
+    <h1>নুকতা বাংলা</h1>
+    <p class="tagline">মনের কথা, নিজের ভাষায়।</p>
+    <div class="layouts"><span>বিজয়</span><span>ফোনেটিক</span><span>ইউনিকোড</span></div>
+    <div class="spacer"></div>
+    <div class="hint"><kbd>F12</kbd> বাংলা চালু বা বন্ধ</div>
+    <div class="progress"><i></i></div>
+    <div class="foot"><span>Version 1.0.1</span><span>© 2026 Nukta Solutions · nuktasolutions.com</span></div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="replay">আবার দেখুন</button>
+  <span>চালু হলে ভেসে উঠবে, ২.৫ সেকেন্ড পর মিলিয়ে যাবে। ক্লিক করলে সাথে সাথে বন্ধ।</span>
+</div>
+
+<script>
+  const splash = document.getElementById("splash");
+  let timer;
+  function play() {
+    clearTimeout(timer);
+    splash.className = "splash";
+    void splash.offsetWidth;
+    splash.className = "splash show";
+    timer = setTimeout(() => { splash.className = "splash hide"; }, 2700);
+  }
+  splash.onclick = () => { clearTimeout(timer); splash.className = "splash hide"; };
+  document.getElementById("replay").onclick = play;
+  // ?still keeps it on screen (for screenshots).
+  if (location.hash === "#still") { splash.className = "splash"; splash.style.opacity = 1; splash.style.transform = "none";
+    splash.querySelector(".progress i").style.width = "64%"; } else { play(); }
+</script>
+</body>
+</html>

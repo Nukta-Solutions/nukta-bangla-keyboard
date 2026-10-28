@@ -199,7 +199,12 @@ impl TextService_Impl {
             return Ok(false);
         }
         if event.is_toggle() {
-            // The word in progress is finished where it was typed, then F12 switches.
+            // The word in progress is finished where it was typed, then F12 switches. The settings
+            // are read again first: this app may have last read them long ago, and switching on
+            // must use the layout the user picked since (not write an old one back).
+            if let Some(settings) = self.state.borrow_mut().settings.as_mut() {
+                settings.reload();
+            }
             self.follow_layout_setting(Some(context));
             self.commit_all(Some(context), true);
             self.toggle_mode();

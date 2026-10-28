@@ -147,7 +147,7 @@ impl Engine {
             }
 
             BanglaKey::Phala(p) => {
-                if self.syllable.has_cluster() && !self.syllable.is_cluster_closed() {
+                if self.syllable.accepts_phala() {
                     if self.syllable.last_is_hasanta() {
                         self.syllable.pop();
                     }

@@ -36,7 +36,7 @@ which the self-extracting installer carries and `install.sh` offers to build fro
 non-GNOME desktop setup, the no-root install and how the Linux port works.
 
 ## Install on Windows
-Run `NuktaBangla-Setup-<version>.exe` (built by `windows\build.ps1`, or downloaded from the `Windows`
+Run `NuktaBangla-Setup.exe` (built by `windows\build.ps1`, or downloaded from the `Windows`
 GitHub workflow's run). It adds **নুকতা বাংলা** to your keyboards; switch to it with Win+Space.
 Windows 10 and 11, 64-bit and 32-bit. [windows/README.md](windows/README.md) has the details and how the
 Windows port works.

@@ -29,4 +29,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: NuktaBangla-Setup
-          path: build/windows/NuktaBangla-Setup-*.exe
+          path: build/windows/NuktaBangla-Setup.exe

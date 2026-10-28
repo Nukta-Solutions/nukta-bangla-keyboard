@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nukta Bangla Mac Settings</title>
+<style>
+  /* macOS: Bangla in Noto Serif Bengali (bundled inside the app), everything else in the system font. */
+  @font-face {
+    font-family: "Nukta Bengali";
+    src: url("../../windows/assets/fonts/NotoSerifBengali.ttf") format("truetype");
+    font-weight: 100 900;
+    unicode-range: U+0980-09FF, U+200C-200D, U+25CC, U+0964-0965;
+  }
+  :root {
+    --bg: #0D0807;
+    --card: #161110;
+    --box: #241C1A;
+    --box-hover: #2B2220;
+    --border: #2D2827;
+    --ink: rgba(255,255,255,.92);
+    --dim: rgba(255,255,255,.56);
+    --faint: rgba(255,255,255,.32);
+    --brand: linear-gradient(63.35deg, #D13A0E 0%, #E87A1E 100%);
+    --font: "Nukta Bengali", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: #6E6E6E; font-family: var(--font); color: var(--ink);
+    display: flex; gap: 32px; padding: 32px; align-items: flex-start; flex-wrap: wrap;
+  }
+  .note { width: 300px; font: 13px/1.6 var(--font); color: #fff; background: rgba(0,0,0,.35); padding: 14px 16px; border-radius: 8px; }
+  .note b { color: #FFD7B5; }
+
+  /* The window: a dark macOS title bar (dark aqua, transparent, our black), we draw the rest. */
+  .window { width: 860px; border-radius: 10px; overflow: hidden; background: var(--bg);
+            box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06); }
+  .titlebar { height: 32px; display: flex; align-items: center; padding: 0 12px; gap: 8px; position: relative;
+              background: #1A1312; font-size: 13px; color: var(--dim); }
+  .titlebar .lights { display: flex; gap: 8px; }
+  .titlebar .lights span { width: 12px; height: 12px; border-radius: 50%; }
+  .titlebar .title { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; }
+  .titlebar svg.app { width: 18px; height: 14px; }
+  .titlebar .spacer { flex: 1; }
+  .titlebar .btn { width: 46px; height: 36px; display: grid; place-items: center; }
+  .titlebar .btn:hover { background: rgba(255,255,255,.08); }
+  .titlebar .btn.close:hover { background: #C42B1C; }
+  .titlebar svg.i { width: 14px; height: 14px; }
+
+  .content { padding: 22px 24px 20px; display: flex; flex-direction: column; gap: 16px; }
+  /* Two columns: layout and typing mode on the left, suggestions and shortcuts on the right.
+     With Bijoy only the layout shows, across the whole width. */
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  .window:not(.phonetic) .columns { grid-template-columns: 1fr; }
+  .head { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
+  .head svg { width: 49px; height: 37px; }
+  .head h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: .1px; }
+  .head p { margin: 2px 0 0; font-size: 13px; color: var(--dim); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 14.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  .card h2 svg.i { width: 16px; height: 16px; opacity: .8; }
+  .hint { margin: 10px 0 0; font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+
+  /* Segmented control. */
+  .seg { display: flex; background: var(--box); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 3px; }
+  /* Heights grow with the text: Noto Serif Bengali sits taller than Latin type. */
+  .seg button { flex: 1; border: 0; background: transparent; color: var(--ink); font: 14px/1.45 var(--font);
+                min-height: 34px; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
+  .seg button:hover { background: var(--box-hover); }
+  .seg button.on { background: var(--brand); color: #fff; font-weight: 600; }
+  .seg.big button { min-height: 48px; padding: 7px 8px 8px; font-size: 15px; }
+  .seg button .sub { display: block; font-size: 11.5px; line-height: 1.5; opacity: .75; font-weight: 400; margin-top: 2px; }
+
+  /* Typing mode cards. */
+  .modes { display: flex; flex-direction: column; gap: 8px; }
+  .mode { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 8px;
+          background: var(--box); border: 1px solid var(--border); cursor: pointer; }
+  .mode:hover { background: var(--box-hover); }
+  .mode.on { border-color: #E87A1E; background: #2A1A13; }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--faint); margin-top: 3px; flex: none; display: grid; place-items: center; }
+  .mode.on .radio { border-color: #E87A1E; }
+  .mode.on .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #E87A1E; }
+  .mode .t { font-size: 14.5px; font-weight: 600; }
+  .mode .t small { font-weight: 400; color: #E87A1E; font-size: 12px; margin-left: 6px; }
+  .mode .d { font-size: 12.5px; color: var(--dim); margin-top: 3px; line-height: 1.55; }
+
+  /* Rows with a toggle or a small segmented control. */
+  .row { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .row:first-of-type { border-top: 0; padding-top: 0; }
+  .row .label { flex: 1; }
+  .row .label .t { font-size: 14px; }
+  .row .label .d { font-size: 12.5px; color: var(--dim); margin-top: 2px; }
+  .row .seg { width: 190px; flex: none; }
+  .row .seg button { min-height: 30px; padding: 4px 8px; font-size: 13px; }
+  .toggle { width: 40px; height: 22px; border-radius: 11px; background: #3A3230; position: relative; cursor: pointer; flex: none; transition: background .15s; }
+  .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .toggle.on { background: var(--brand); }
+  .toggle.on::after { left: 21px; }
+  .disabled { opacity: .38; pointer-events: none; }
+
+  /* Shortcuts as key caps. */
+  .keys { display: grid; grid-template-columns: 150px 1fr; gap: 9px 14px; align-items: center; font-size: 13px; }
+  .keys .k { display: flex; gap: 4px; justify-content: flex-end; }
+  kbd { font: 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; background: var(--box); border: 1px solid var(--border);
+        border-bottom-width: 2px; border-radius: 5px; padding: 2px 7px; color: var(--ink); white-space: nowrap; }
+  .keys .v { color: var(--ink); opacity: .78; }
+  .keys .or { font-size: 11.5px; color: var(--dim); margin: 0 1px; }
+  .keys .k { align-items: center; }
+  .when { font-size: 12px; color: #E87A1E; margin: 14px 0 9px; font-weight: 600; }
+  .when:first-of-type { margin-top: 2px; }
+  .foot { font-size: 12px; color: var(--faint); text-align: center; margin-top: 2px; }
+
+  .phonetic-only { display: none; }
+  .phonetic .phonetic-only { display: block; }
+  .phonetic .col.phonetic-only { display: flex; }
+  svg.i { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="nu-on" x1="1.761" y1="20.8" x2="35.665" y2="3.782" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D13A0E"/><stop offset="1" stop-color="#E87A1E"/>
+    </linearGradient>
+    <symbol id="logo" viewBox="0 0 37 28">
+      <rect width="37" height="28" rx="6" fill="url(#nu-on)"/>
+      <path transform="translate(10 4.989)" fill="#fff" fill-opacity=".9" d="M10.541 13.665L9.372 12.773C9.33 12.277 9.245 11.749 9.117 11.189C8.99 10.63 8.82 10.084 8.607 9.553C8.395 9.022 8.147 8.543 7.863 8.118C7.58 7.693 7.254 7.35 6.886 7.088C6.517 6.826 6.121 6.694 5.696 6.694C5.54 6.694 5.38 6.712 5.217 6.748C5.055 6.783 4.916 6.836 4.803 6.907L5.419 5.802C5.632 5.944 5.788 6.142 5.887 6.397C5.986 6.652 6.036 6.907 6.036 7.162C6.036 7.559 5.951 7.916 5.781 8.235C5.611 8.554 5.366 8.806 5.047 8.99C4.729 9.174 4.328 9.266 3.847 9.266C3.039 9.266 2.423 9.025 1.998 8.543C1.573 8.062 1.36 7.452 1.36 6.716C1.36 5.894 1.622 5.256 2.146 4.803C2.671 4.35 3.351 4.123 4.187 4.123C4.81 4.123 5.387 4.233 5.919 4.452C6.45 4.672 6.921 4.977 7.332 5.366C7.743 5.756 8.104 6.202 8.416 6.705C8.728 7.208 8.983 7.739 9.181 8.299C9.379 8.859 9.514 9.415 9.585 9.967L9.287 9.989C9.273 9.705 9.248 9.326 9.213 8.852C9.177 8.377 9.146 7.87 9.117 7.332C9.089 6.794 9.075 6.305 9.075 5.866L9.075 1.36L0.829 1.36L0 0L12.263 0L13.091 1.36L10.69 1.36L10.69 13.644L10.541 13.665ZM4.608 14.877C4.608 14.154 4.873 13.563 5.405 13.102C5.936 12.642 6.69 12.411 7.668 12.411C8.461 12.411 9.223 12.553 9.953 12.836C10.682 13.12 11.362 13.502 11.993 13.984C12.623 14.466 13.194 15.008 13.704 15.61C14.214 16.212 14.646 16.839 15 17.491L14.192 18.022C13.64 17.186 13.027 16.463 12.354 15.854C11.681 15.245 10.934 14.77 10.112 14.43C9.29 14.09 8.391 13.92 7.413 13.92C6.917 13.92 6.559 14.002 6.34 14.165C6.12 14.328 6.01 14.551 6.01 14.834C6.01 15.117 6.117 15.348 6.329 15.525C6.542 15.702 6.846 15.79 7.243 15.79C7.625 15.79 7.965 15.702 8.263 15.525C8.561 15.348 8.798 15.061 8.975 14.664C9.152 14.267 9.241 13.736 9.241 13.07L10.686 13.772C10.686 14.437 10.558 15.043 10.303 15.589C10.048 16.134 9.673 16.57 9.177 16.896C8.681 17.221 8.072 17.384 7.349 17.384C6.556 17.384 5.9 17.151 5.383 16.683C4.866 16.216 4.608 15.613 4.608 14.877Z"/>
+      <circle cx="25.5" cy="17.489" r="1.5" fill="#fff" fill-opacity=".9"/>
+    </symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/></symbol>
+    <symbol id="i-type" viewBox="0 0 24 24"><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+    <symbol id="i-command" viewBox="0 0 24 24"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  </defs>
+</svg>
+
+<div class="window" id="window">
+  <div class="titlebar">
+    <span class="lights"><span style="background:#FF5F57"></span><span style="background:#FEBC2E"></span><span style="background:#3A3230"></span></span>
+    <span class="title">নুকতা বাংলা — সেটিংস</span>
+  </div>
+
+  <div class="content">
+    <div class="head">
+      <svg viewBox="0 0 37 28"><use href="#logo"/></svg>
+      <div>
+        <h1>নুকতা বাংলা</h1>
+        <p>সেটিংস · সংস্করণ ১.০.১</p>
+      </div>
+    </div>
+
+    <div class="columns">
+      <div class="col">
+      <div class="card">
+        <h2><svg class="i"><use href="#i-keyboard"/></svg>কিবোর্ড লেআউট</h2>
+        <div class="seg big" id="layout">
+          <button data-layout="bijoy" class="on">বিজয়<span class="sub">চেনা বিজয় লেআউট</span></button>
+          <button data-layout="phonetic">ফোনেটিক<span class="sub">ami → আমি</span></button>
+        </div>
+        <p class="hint">মেনু বারের নু আইকন থেকেও লেআউট বদলানো যায়।</p>
+      </div>
+
+      <div class="card phonetic-only">
+        <h2><svg class="i"><use href="#i-type"/></svg>টাইপিং মোড</h2>
+        <div class="modes" id="modes">
+          <div class="mode on" data-mode="first">
+            <span class="radio"></span>
+            <div><div class="t">ফোনেটিক আগে<small>প্রস্তাবিত</small></div>
+            <div class="d">যেমন বানান লিখবেন ঠিক তেমন বাংলা বসবে। তালিকা থেকে অন্য শব্দ বেছে নিলে পরের বার সেটাই আগে আসবে।</div></div>
+          </div>
+          <div class="mode" data-mode="smart">
+            <span class="radio"></span>
+            <div><div class="t">স্মার্ট</div>
+            <div class="d">অভিধান আর অটোকারেক্ট সবচেয়ে মানানসই শব্দ বেছে দেবে (sonar → সোনার)।</div></div>
+          </div>
+          <div class="mode" data-mode="only">
+            <span class="radio"></span>
+            <div><div class="t">শুধু ফোনেটিক</div>
+            <div class="d">সাজেশন তালিকা ছাড়া, অক্ষর ধরে ধরে লেখা।</div></div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+          <div class="label"><div class="t">কোলন (:) চাপলে</div><div class="d">কোলন বেছে নিলেও বিসর্গ-ওয়ালা শব্দ তালিকায় পাবেন (dukho → দুঃখ)।</div></div>
+          <div class="seg" data-group="colon"><button class="on">কোলন&nbsp; :</button><button>বিসর্গ&nbsp; দুঃ</button></div>
+        </div>
+      </div>
+
+      </div>
+      <div class="col phonetic-only">
+      <div class="card" id="suggestions">
+        <h2><svg class="i"><use href="#i-list"/></svg>সাজেশন</h2>
+        <div class="row"><div class="label"><div class="t">অটোকারেক্ট</div><div class="d">চেনা ভুল বানান ঠিক করে দেখাও</div></div><div class="toggle on"></div></div>
+        <div class="row"><div class="label"><div class="t">ইমোজি</div><div class="d">হাসি → 😄</div></div><div class="toggle on"></div></div>
+        <div class="row"><div class="label"><div class="t">ইংরেজি শব্দ</div><div class="d">টাইপ করা ইংরেজি শব্দটিও তালিকায় রাখো</div></div><div class="toggle on"></div></div>
+        <div class="row"><div class="label"><div class="t">তালিকার জায়গা</div></div><div class="seg" data-group="pos"><button class="on">লেখার নিচে</button><button>লেখার উপরে</button></div></div>
+        <div class="row"><div class="label"><div class="t">সাজানো</div></div><div class="seg" data-group="dir"><button class="on">উপর-নিচে</button><button>পাশাপাশি</button></div></div>
+      </div>
+
+      <div class="card">
+        <h2><svg class="i"><use href="#i-command"/></svg>শর্টকাট</h2>
+
+        <div class="when">সবসময়</div>
+        <div class="keys">
+          <div class="k"><kbd>⌃ Control</kbd><span class="or">+</span><kbd>Space</kbd></div><div class="v">ইংরেজি আর নুকতা বাংলার মধ্যে বদল</div>
+          <div class="k"><kbd>🌐 fn</kbd></div><div class="v">একই কাজ, যদি সিস্টেম সেটিংসে চালু থাকে</div>
+        </div>
+
+        <div class="when">ফোনেটিকে লেখার সময়, সাজেশন তালিকা খোলা থাকলে</div>
+        <div class="keys">
+          <div class="k"><kbd>Space</kbd></div><div class="v">বাছাই করা শব্দটা বসবে, সাথে একটা স্পেস</div>
+          <div class="k"><kbd>Return</kbd></div><div class="v">বাছাই করা শব্দটা বসবে, নতুন লাইন হবে না</div>
+          <div class="k"><kbd>↑</kbd><kbd>↓</kbd><span class="or">বা</span><kbd>Tab</kbd></div><div class="v">তালিকায় অন্য শব্দ বাছাই</div>
+          <div class="k"><kbd>1</kbd><span class="or">থেকে</span><kbd>9</kbd></div><div class="v">তালিকার ওই নম্বরের শব্দটা সরাসরি বসবে</div>
+          <div class="k"><kbd>Esc</kbd></div><div class="v">শব্দটা বাতিল, কিছুই বসবে না</div>
+          <div class="k"><kbd>⌥ Option</kbd><span class="or">+</span><kbd>Delete</kbd></div><div class="v">লিখতে থাকা পুরো শব্দটা একবারে মুছবে</div>
+        </div>
+      </div>
+
+      </div>
+    </div>
+    <div class="foot">পরিবর্তন সাথে সাথে সব অ্যাপে চালু হয়</div>
+  </div>
+</div>
+
+<div class="note">
+  <b>ম্যাক সেটিংস: নতুন ডিজাইনের প্রিভিউ</b><br>
+  • উইন্ডোজে অনুমোদিত ডিজাইনই, ম্যাকের টাইটেল বার আর ম্যাকের শর্টকাট দিয়ে।<br>
+  • উপরে <b>বিজয় / ফোনেটিক</b> বদলে দেখুন: বিজয়ে শুধু লেআউট, ফোনেটিকে সব অপশন।<br>
+  • টাইপিং মোডে <b>শুধু ফোনেটিক</b> বাছলে সাজেশনের অংশ ধূসর হয়।<br>
+  • সুইচ, বোতাম সব ক্লিক করে দেখা যায়।<br>
+  • বাংলা লেখা <b>Noto Serif Bengali</b>-তে (অ্যাপের ভেতরে), ইংরেজি ম্যাকের সিস্টেম ফন্টে (SF Pro)।
+</div>
+
+<script>
+  const win = document.getElementById("window");
+  document.querySelectorAll("#layout button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#layout button").forEach(x => x.classList.toggle("on", x === b));
+    win.classList.toggle("phonetic", b.dataset.layout === "phonetic");
+  });
+  document.querySelectorAll(".seg[data-group] button").forEach(b => b.onclick = () => {
+    b.parentElement.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+  });
+  document.querySelectorAll(".toggle").forEach(t => t.onclick = () => t.classList.toggle("on"));
+  document.querySelectorAll(".mode").forEach(m => m.onclick = () => {
+    document.querySelectorAll(".mode").forEach(x => x.classList.toggle("on", x === m));
+    document.getElementById("suggestions").classList.toggle("disabled", m.dataset.mode === "only");
+  });
+  if (location.hash === "#phonetic") document.querySelector('[data-layout="phonetic"]').click();
+</script>
+</body>
+</html>

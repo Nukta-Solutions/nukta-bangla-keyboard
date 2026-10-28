@@ -103,6 +103,15 @@ final class EngineTests: XCTestCase {
         ("hZfQj", "ব্যাংক"),
         ("gCjZ", "ঐক্য"),
         ("vZfh", "র\u{200D}\u{09CD}যাব"),
+        // A phala after a kar still joins the consonant: ্য/্র then ু, or ু then ্য/্র.
+        ("tZsv", "ট্যুর"),
+        ("tsZv", "ট্যুর"),
+        ("jsz", "ক্রু"),
+        ("ozfm", "গ্রাম"),
+        ("ofzm", "গ্রাম"),
+        ("cjfZ", "ক্যো"),
+        // After ং ঃ ঁ or a visible hasanta it doesn't: those end the syllable.
+        ("jQZ", "কং্য"),
         // reph
         ("mA", "র্ম"),
         ("jmA", "কর্ম"),

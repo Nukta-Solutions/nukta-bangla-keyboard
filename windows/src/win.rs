@@ -222,18 +222,6 @@ pub fn bangla_font_for_program() -> Option<PathBuf> {
     bangla_font_in(exe.parent()?)
 }
 
-/// Makes the bundled Bangla font usable by GDI in this process only (nothing is installed in
-/// Windows), once. False if it isn't there.
-pub fn load_bangla_font_for_gdi(font: &Path) -> bool {
-    use std::sync::OnceLock;
-    use windows::Win32::Graphics::Gdi::{AddFontResourceExW, FR_PRIVATE};
-    static LOADED: OnceLock<bool> = OnceLock::new();
-    *LOADED.get_or_init(|| {
-        let path: Vec<u16> = font.as_os_str().to_string_lossy().encode_utf16().chain(Some(0)).collect();
-        unsafe { AddFontResourceExW(PCWSTR(path.as_ptr()), FR_PRIVATE, None) > 0 }
-    })
-}
-
 /// The floating bar and tray icon, beside the settings program.
 pub fn bar_program(dll: &Path) -> PathBuf {
     settings_program(dll).with_file_name("NuktaBangla.exe")

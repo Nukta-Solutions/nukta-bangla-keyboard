@@ -234,15 +234,31 @@ impl Settings {
     /// (the layout, picked from the taskbar in another app) is kept, and so are keys this version
     /// doesn't know.
     fn set(&mut self, key: &str, value: Value) {
-        self.values = read(&self.path);
+        // A file that is there but can't be read just now (another process replacing it) is tried
+        // again; if it still can't be read, what this process last read is kept, so writing one
+        // key never wipes the others (the layout, the typing mode…).
+        if let Some(values) = read_existing(&self.path) {
+            self.values = values;
+        }
         self.values.insert(key.to_owned(), value);
         if let Some(directory) = self.path.parent() {
             let _ = fs::create_dir_all(directory);
         }
         if let Ok(json) = serde_json::to_vec_pretty(&self.values) {
             let temporary = self.path.with_extension(format!("json.{}.tmp", std::process::id()));
-            if fs::write(&temporary, json).is_ok() && fs::rename(&temporary, &self.path).is_err() {
-                let _ = fs::remove_file(&temporary);
+            if fs::write(&temporary, json).is_ok() {
+                // Replacing can fail for a moment while another process has the file open.
+                let mut saved = false;
+                for attempt in 0..5 {
+                    if fs::rename(&temporary, &self.path).is_ok() {
+                        saved = true;
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10 * (attempt + 1)));
+                }
+                if !saved {
+                    let _ = fs::remove_file(&temporary);
+                }
             }
         }
         self.stamp = modified(&self.path);
@@ -264,6 +280,21 @@ fn read(path: &Path) -> Map<String, Value> {
         Some(Value::Object(map)) => map,
         _ => Map::new(),
     }
+}
+
+/// The file's settings, or None if it exists but couldn't be read after a few tries; no file at
+/// all is an empty set.
+fn read_existing(path: &Path) -> Option<Map<String, Value>> {
+    for attempt in 0..5 {
+        if !path.exists() {
+            return Some(Map::new());
+        }
+        if let Some(Value::Object(map)) = fs::read(path).ok().and_then(|data| serde_json::from_slice(&data).ok()) {
+            return Some(map);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10 * (attempt + 1)));
+    }
+    None
 }
 
 fn modified(path: &Path) -> Option<SystemTime> {

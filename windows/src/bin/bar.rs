@@ -374,7 +374,12 @@ mod app {
 
     /// English ⇄ Bangla, as F12 does.
     fn toggle() {
-        let layout = with_app(|app| app.settings.layout()).unwrap_or_default();
+        // The latest from the file: the layout may have been changed elsewhere a moment ago.
+        let layout = with_app(|app| {
+            app.settings.reload();
+            app.settings.layout()
+        })
+        .unwrap_or_default();
         set_mode(if mode().is_none() { Some(layout) } else { None });
     }
 

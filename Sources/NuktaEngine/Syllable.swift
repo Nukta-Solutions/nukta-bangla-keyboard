@@ -43,6 +43,17 @@ struct Syllable: Equatable {
         }
     }
 
+    /// A phala can still join the consonant: after a kar too (ট + ু + ্য = ট্যু, typed either way),
+    /// but not after ং ঃ ঁ or a visible hasanta, which end the syllable.
+    var acceptsPhala: Bool {
+        hasCluster && !tokens.contains { token in
+            switch token {
+            case .sign, .explicitHasanta: return true
+            default: return false
+            }
+        }
+    }
+
     static func isWaitingKar(_ token: Token) -> Bool {
         if case .waitingKar = token { return true }
         return false

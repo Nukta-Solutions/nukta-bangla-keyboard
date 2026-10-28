@@ -45,7 +45,8 @@ WizardSmallImageFile=wizard-small-100.bmp,wizard-small-125.bmp,wizard-small-150.
 WizardImageStretch=no
 DisableWelcomePage=no
 OutputDir=..\..\build\windows
-OutputBaseFilename=NuktaBangla-Setup-{#AppVersion}
+; No version in the name: the website links to releases/latest/download/NuktaBangla-Setup.exe.
+OutputBaseFilename=NuktaBangla-Setup
 Compression=lzma2
 SolidCompression=yes
 ; Code signing, once a certificate is in place: define a sign tool named "signtool" in Inno
@@ -61,11 +62,11 @@ Source: "{#Release32}\NuktaBangla.exe"; DestDir: "{app}"; Flags: ignoreversion r
 Source: "{#Release32}\NuktaBanglaSettings.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
 Source: "nukta-bangla.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; The brand's Bangla font, for নুকতা বাংলা's own windows and its suggestion list only: loaded from
-; here by the programs and the keyboard, never installed in Windows. Apps may hold it open, so an
-; update in use is replaced on the next restart.
+; here through DirectWrite by the programs and the keyboard, never installed in Windows. Apps may
+; hold it open, so an update in use is replaced on the next restart.
+; (Not for this installer's own text: Inno Setup draws with GDI, which misplaces this font's ু —
+; নুকতা came out as নকতু. Its pages keep Windows' fonts; its pictures are drawn in Noto.)
 Source: "..\assets\fonts\NotoSerifBengali.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion restartreplace uninsrestartdelete
-; The same font for this installer's own pages (see InitializeSetup).
-Source: "..\assets\fonts\NotoSerifBengali.ttf"; Flags: dontcopy
 Source: "..\assets\fonts\OFL.txt"; DestDir: "{app}\Licenses"; DestName: "OFL-NotoSerifBengali.txt"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}\Licenses"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\..\Licenses\MPL-2.0.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
@@ -92,43 +93,15 @@ FinishedLabel=ইনস্টল শেষ। F12 চাপুন বা বা�
 ; Adds the keyboard to the languages of the user who ran Setup (not the administrator account it
 ; may have been elevated to).
 Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--enable"; Flags: runasoriginaluser waituntilterminated; StatusMsg: "Adding নুকতা বাংলা to your keyboards…"
-Filename: "{app}\NuktaBangla.exe"; Description: "নুকতা বাংলা চালু করুন (Launch Nukta Bangla)"; Flags: postinstall nowait skipifsilent runasoriginaluser
+; With the splash screen, as when Windows starts: no restart is needed on a first install.
+Filename: "{app}\NuktaBangla.exe"; Parameters: "--startup"; Description: "নুকতা বাংলা চালু করুন (Launch Nukta Bangla)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 Filename: "{app}\NuktaBanglaSettings.exe"; Description: "সেটিংস খুলুন (Open settings)"; Flags: postinstall nowait skipifsilent runasoriginaluser unchecked
 
 [UninstallRun]
 Filename: "{app}\NuktaBangla.exe"; Parameters: "--quit"; RunOnceId: "CloseBar"; Flags: waituntilterminated
 Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--disable"; RunOnceId: "RemoveFromKeyboards"; Flags: waituntilterminated
 
-[LangOptions]
-; The installer's pages in the brand's Bangla font, loaded by InitializeSetup below. Noto Serif
-; Bengali has Latin letters too, so the English text is drawn in it as well.
-DialogFontName=Noto Serif Bengali
-WelcomeFontName=Noto Serif Bengali
-TitleFontName=Noto Serif Bengali
-
 [Code]
-const
-  FR_PRIVATE = $10;
-
-function AddFontResourceEx(FileName: String; Flags: Cardinal; Reserved: Cardinal): Integer;
-  external 'AddFontResourceExW@gdi32.dll stdcall';
-
-// Loads the font for this installer only, before its window is made: nothing goes into Windows.
-function InitializeSetup(): Boolean;
-begin
-  ExtractTemporaryFile('NotoSerifBengali.ttf');
-  AddFontResourceEx(ExpandConstant('{tmp}\NotoSerifBengali.ttf'), FR_PRIVATE, 0);
-  Result := True;
-end;
-
-// The uninstaller's pages likewise, from the installed copy.
-function InitializeUninstall(): Boolean;
-begin
-  if FileExists(ExpandConstant('{app}\fonts\NotoSerifBengali.ttf')) then
-    AddFontResourceEx(ExpandConstant('{app}\fonts\NotoSerifBengali.ttf'), FR_PRIVATE, 0);
-  Result := True;
-end;
-
 // An update closes the running top bar first, so its program can be replaced; Setup starts the
 // new one at the end.
 function PrepareToInstall(var NeedsRestart: Boolean): String;

@@ -1,7 +1,7 @@
 <#
 Builds নুকতা বাংলা for Windows and its installer:
 
-    build\windows\NuktaBangla-Setup-<version>.exe
+    build\windows\NuktaBangla-Setup.exe
 
 Needs Rust (https://rustup.rs) with the MSVC build tools, and Inno Setup 6.3 or later
 (https://jrsoftware.org/isinfo.php) for the installer. Run from any folder:
@@ -56,4 +56,4 @@ $iscc = Get-Command iscc -ErrorAction SilentlyContinue
 $isccPath = if ($iscc) { $iscc.Source } else { Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe' }
 if (-not (Test-Path $isccPath)) { throw 'Inno Setup 6 not found: install it from https://jrsoftware.org/isinfo.php' }
 Invoke-Checked 'Inno Setup' { & $isccPath "/DAppVersion=$Version" 'installer\nukta-bangla.iss' }
-Write-Host "Built $(Join-Path $Out "NuktaBangla-Setup-$Version.exe")"
+Write-Host "Built $(Join-Path $Out "NuktaBangla-Setup.exe") (v$Version)"

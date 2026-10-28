@@ -1,7 +1,7 @@
 নুকতা বাংলা — Windows-এ ইনস্টল করার নিয়ম
 (Windows 10 বা 11; 64-bit ও 32-bit দুই ধরনের কম্পিউটারেই চলে)
 
-১. NuktaBangla-Setup-x.x.x.exe ফাইলটিতে ডাবল-ক্লিক করুন।
+১. NuktaBangla-Setup.exe ফাইলটিতে ডাবল-ক্লিক করুন।
    "Windows protected your PC" দেখালে: More info → Run anyway চাপুন।
 
 ২. অনুমতি চাইলে Yes চাপুন, তারপর Next → Install → Finish।

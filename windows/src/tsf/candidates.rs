@@ -18,7 +18,7 @@ use windows::Win32::Graphics::Gdi::{
     CLEARTYPE_QUALITY, COLOR_BTNSHADOW, COLOR_GRAYTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT, COLOR_WINDOW,
     COLOR_WINDOWTEXT, DEFAULT_CHARSET, DT_CALCRECT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE,
     FONT_CLIP_PRECISION, FONT_OUTPUT_PRECISION, FW_NORMAL, HDC, HFONT, HGDIOBJ, LOGPIXELSY, MONITORINFO,
-    MONITOR_DEFAULTTONEAREST, PAINTSTRUCT, PS_SOLID, SRCCOPY, TRANSPARENT,
+    MONITOR_DEFAULTTONEAREST, PAINTSTRUCT, PS_SOLID, SRCCOPY, SYS_COLOR_INDEX, TRANSPARENT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, KillTimer, RegisterClassExW,
@@ -28,6 +28,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use super::module;
+use crate::gfx::{Color, Gfx, Rect, Style};
 use crate::settings::{PopupDirection, PopupPosition};
 
 /// What the list tells the text service.
@@ -79,6 +80,10 @@ struct State {
 struct Fonts {
     word: HFONT,
     small: HFONT,
+    /// DirectWrite, with the brand's Noto Serif Bengali for the words: GDI can't shape that font
+    /// (its ু lands on the wrong letter), DirectWrite can. None if Direct2D won't start: the GDI
+    /// fonts (Nirmala UI) are used then.
+    gfx: Option<Gfx>,
     /// Pixels per 96-dpi unit, ×100.
     scale: i32,
 }
@@ -92,21 +97,44 @@ impl Fonts {
             dpi
         };
         let scale = if dpi > 0 { dpi * 100 / 96 } else { 100 };
-        // The words in the brand's Noto Serif Bengali, loaded for this app only from the install
-        // folder (`fonts\`, beside `x64\` and `x86\`); Nirmala UI if it isn't there.
+        // The brand's Noto Serif Bengali from the install folder (`fonts\`, beside `x64\` and
+        // `x86\`), through DirectWrite.
         let dll = super::register::dll_path();
-        let bundled = std::path::Path::new(&dll)
-            .parent()
-            .and_then(std::path::Path::parent)
-            .and_then(crate::win::bangla_font_in)
-            .is_some_and(|font| crate::win::load_bangla_font_for_gdi(&font));
-        let face = if bundled { w!("Noto Serif Bengali") } else { w!("Nirmala UI") };
-        Fonts { word: font(face, 21 * scale / 100), small: font(w!("Segoe UI"), 14 * scale / 100), scale }
+        let bundled = std::path::Path::new(&dll).parent().and_then(std::path::Path::parent).and_then(crate::win::bangla_font_in);
+        let gfx = Gfx::new(bundled.as_deref()).ok();
+        Fonts { word: font(w!("Nirmala UI"), 21 * scale / 100), small: font(w!("Segoe UI"), 14 * scale / 100), gfx, scale }
     }
 
     fn px(&self, value: i32) -> i32 {
         value * self.scale / 100
     }
+
+    fn dpi(&self) -> f32 {
+        self.scale as f32 * 96.0 / 100.0
+    }
+
+    /// A text's size in pixels: the word (big) or the small type.
+    fn measure(&self, dc: HDC, text: &str, word: bool) -> (i32, i32) {
+        match &self.gfx {
+            Some(gfx) => {
+                let style = Style::new(if word { WORD_SIZE } else { SMALL_SIZE });
+                let text = if text.is_empty() { " " } else { text };
+                let to_px = |dips: f32| (dips * self.scale as f32 / 100.0).ceil() as i32;
+                (to_px(gfx.text_width(text, style)), to_px(gfx.text_height(text, style, 4000.0)))
+            }
+            None => measure(dc, if word { self.word } else { self.small }, text),
+        }
+    }
+}
+
+/// The type sizes, in DIPs.
+const WORD_SIZE: f32 = 21.0;
+const SMALL_SIZE: f32 = 14.0;
+
+/// A system colour as the drawing code's colour.
+fn system_color(index: SYS_COLOR_INDEX) -> Color {
+    let bgr = unsafe { GetSysColor(index) };
+    Color(((bgr & 0xFF) << 16) | (bgr & 0xFF00) | ((bgr >> 16) & 0xFF), 1.0)
 }
 
 impl Drop for Fonts {
@@ -321,8 +349,8 @@ fn arrange(state: &mut State, hwnd: HWND) {
     let padding = fonts.px(6);
     let cell_padding = (fonts.px(8), fonts.px(3));
 
-    let auxiliary = measure(dc, fonts.small, &state.auxiliary);
-    let more = more_sign(state).map_or((0, 0), |sign| measure(dc, fonts.small, sign));
+    let auxiliary = fonts.measure(dc, &state.auxiliary, false);
+    let more = more_sign(state).map_or((0, 0), |sign| fonts.measure(dc, sign, false));
     let auxiliary_rect = RECT {
         left: padding + cell_padding.0,
         top: padding,
@@ -332,8 +360,8 @@ fn arrange(state: &mut State, hwnd: HWND) {
 
     let sizes: Vec<(i32, i32)> = shown(state)
         .map(|index| {
-            let number = measure(dc, fonts.small, &(index + 1).to_string());
-            let word = measure(dc, fonts.word, &state.candidates[index]);
+            let number = fonts.measure(dc, &(index + 1).to_string(), false);
+            let word = fonts.measure(dc, &state.candidates[index], true);
             (number.0 + fonts.px(4) + word.0 + 2 * cell_padding.0, number.1.max(word.1) + 2 * cell_padding.1)
         })
         .collect();
@@ -385,6 +413,9 @@ fn arrange(state: &mut State, hwnd: HWND) {
 
 fn paint(hwnd: HWND, state: &State) {
     let Some(fonts) = state.fonts.as_ref() else { return };
+    if let Some(gfx) = &fonts.gfx {
+        return paint_directwrite(hwnd, state, fonts, gfx);
+    }
     unsafe {
         let mut ps = PAINTSTRUCT::default();
         let screen = BeginPaint(hwnd, &mut ps);
@@ -428,6 +459,47 @@ fn paint(hwnd: HWND, state: &State) {
         SelectObject(dc, old_bitmap);
         let _ = DeleteObject(bitmap.into());
         let _ = DeleteDC(dc);
+        let _ = EndPaint(hwnd, &ps);
+    }
+}
+
+/// The same as the GDI drawing below, with DirectWrite: the words in Noto Serif Bengali.
+fn paint_directwrite(hwnd: HWND, state: &State, fonts: &Fonts, gfx: &Gfx) {
+    unsafe {
+        let mut ps = PAINTSTRUCT::default();
+        let screen = BeginPaint(hwnd, &mut ps);
+        let (width, height) = state.size;
+        let dip = |px: i32| px as f32 * 100.0 / fonts.scale as f32;
+        let rect = |r: RECT| Rect { left: dip(r.left), top: dip(r.top), right: dip(r.right), bottom: dip(r.bottom) };
+        gfx.paint(screen, width, height, fonts.dpi(), |canvas| {
+            let all = Rect::new(0.0, 0.0, dip(width), dip(height));
+            canvas.fill_rect(all, system_color(COLOR_WINDOW));
+            canvas.stroke_round(all, 0.0, system_color(COLOR_BTNSHADOW));
+            let grey = system_color(COLOR_GRAYTEXT);
+            canvas.text(&state.auxiliary, rect(state.auxiliary_rect), Style::new(SMALL_SIZE), grey);
+            if let Some(sign) = more_sign(state) {
+                canvas.text(sign, rect(state.more_rect), Style::new(SMALL_SIZE), grey);
+            }
+            let highlighted = state.pressed.unwrap_or(state.selected);
+            for (index, cell) in &state.cells {
+                let is_highlighted = *index == highlighted;
+                let cell = rect(*cell);
+                if is_highlighted {
+                    canvas.fill_round(cell, 4.0, system_color(COLOR_HIGHLIGHT));
+                }
+                let (number_color, word_color) = if is_highlighted {
+                    (system_color(COLOR_HIGHLIGHTTEXT), system_color(COLOR_HIGHLIGHTTEXT))
+                } else {
+                    (grey, system_color(COLOR_WINDOWTEXT))
+                };
+                let number = (index + 1).to_string();
+                let number_width = gfx.text_width(&number, Style::new(SMALL_SIZE));
+                let mut text = Rect { left: cell.left + 8.0, ..cell };
+                canvas.text(&number, text, Style::new(SMALL_SIZE), number_color);
+                text.left += number_width + 4.0;
+                canvas.text(&state.candidates[*index], text, Style::new(WORD_SIZE), word_color);
+            }
+        });
         let _ = EndPaint(hwnd, &ps);
     }
 }

@@ -5,7 +5,7 @@ output as on macOS and Linux, from a port of the same engine, with the same sett
 64-bit and 32-bit; not Windows on Arm yet.
 
 ## Install
-Run `NuktaBangla-Setup-<version>.exe` and accept the administrator prompt. It adds **নুকতা বাংলা** to
+Run `NuktaBangla-Setup.exe` and accept the administrator prompt. It adds **নুকতা বাংলা** to
 your keyboards, under Bangla (Bangladesh), adding Bangla to your languages if it isn't there. Switch to
 it like any keyboard: **Win + Space**, or the language button in the taskbar.
 
@@ -47,7 +47,7 @@ On Windows, with [Rust](https://rustup.rs) (and the Visual Studio C++ build tool
 powershell -ExecutionPolicy Bypass -File windows\build.ps1
 ```
 It runs the tests, builds the 64-bit and 32-bit DLLs and the settings program, and writes
-`build\windows\NuktaBangla-Setup-<version>.exe`. The `Windows` GitHub workflow does the same on every
+`build\windows\NuktaBangla-Setup.exe`. The `Windows` GitHub workflow does the same on every
 push that touches `windows/` and keeps the installer as a download.
 
 The engine and phonetic tests are plain Rust and run anywhere, a Mac included: `cargo test` in this

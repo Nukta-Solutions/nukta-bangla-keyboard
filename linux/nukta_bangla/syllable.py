@@ -66,6 +66,12 @@ class Syllable:
                 return True
         return False
 
+    @property
+    def accepts_phala(self):
+        """A phala can still join the consonant: after a kar too (ট + ু + ্য = ট্যু, typed either
+        way), but not after ং ঃ ঁ or a visible hasanta, which end the syllable."""
+        return self.has_cluster and not any(t[0] in ("sign", "explicitHasanta") for t in self.tokens)
+
     def append(self, token):
         self.tokens.append(token)
 

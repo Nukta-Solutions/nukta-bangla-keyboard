@@ -69,6 +69,12 @@ impl Syllable {
         })
     }
 
+    /// A phala can still join the consonant: after a kar too (ট + ু + ্য = ট্যু, typed either way),
+    /// but not after ং ঃ ঁ or a visible hasanta, which end the syllable.
+    pub(crate) fn accepts_phala(&self) -> bool {
+        self.has_cluster() && !self.tokens.iter().any(|t| matches!(t, Token::Sign(_) | Token::ExplicitHasanta))
+    }
+
     pub(crate) fn push(&mut self, token: Token) {
         self.tokens.push(token);
     }
@@ -83,6 +89,11 @@ impl Syllable {
         if !self.has_cluster() {
             // অ (Shift+F) shows straight away; an f after it still turns it into আ.
             if matches!(self.tokens.first(), Some(Token::Vowel(_))) {
+                return self.rendered();
+            }
+            // So does a ি ে ৈ typed before its consonant (c j → কে): ে now, কে with the j.
+            // Windows only for now; Swift and Python still hold it back.
+            if self.tokens.iter().all(|t| matches!(t, Token::PreKar(_))) {
                 return self.rendered();
             }
             return String::new();

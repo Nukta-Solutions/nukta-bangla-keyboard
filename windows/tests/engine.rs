@@ -56,6 +56,15 @@ fn words() {
         // phala
         ("ozfm", "গ্রাম"), ("dhlZfVW", "বিদ্যাল\u{09DF}"), ("hZfQj", "ব্যাংক"), ("gCjZ", "ঐক্য"),
         ("vZfh", "র\u{200D}\u{09CD}যাব"),
+        // A phala after a kar still joins the consonant: ্য/্র then ু, or ু then ্য/্র.
+        ("tZsv", "ট্যুর"),
+        ("tsZv", "ট্যুর"),
+        ("jsz", "ক্রু"),
+        ("ozfm", "গ্রাম"),
+        ("ofzm", "গ্রাম"),
+        ("cjfZ", "ক্যো"),
+        // After ং ঃ ঁ or a visible hasanta it doesn't: those end the syllable.
+        ("jQZ", "কং্য"),
         // reph
         ("mA", "র্ম"), ("jmA", "কর্ম"), ("djA", "র্কি"), ("FKA", "অর্থ"), ("jkAarjgN", "কর্তৃপক্ষ"),
         ("gSLghA", "ঊর্ধ্ব"),
@@ -145,13 +154,25 @@ fn display_while_composing() {
     assert_eq!(next.display, "ব");
 }
 
-/// What goes on screen: a kar, ্ or অ with nothing to sit on stays off it until the next key.
+/// What goes on screen: a ি ে ৈ typed before its consonant shows at once; a ্ with nothing to sit
+/// on stays off it until the next key.
 #[test]
 fn visible_holds_back_what_has_no_consonant_yet() {
     let mut e = Engine::new();
-    assert_eq!(e.process_character('d').unwrap().visible, "");
+    assert_eq!(e.process_character('d').unwrap().visible, "\u{09BF}");
     assert_eq!(e.process_character('j').unwrap().visible, "কি");
     assert_eq!(e.process_character('g').unwrap().visible, "কি");
+    let mut e = Engine::new();
+    assert_eq!(e.process_character('c').unwrap().visible, "\u{09C7}");
+    assert_eq!(e.process_character('j').unwrap().visible, "কে");
+    assert_eq!(e.process_character('f').unwrap().visible, "কো");
+    // Backspace takes it off the screen again.
+    let mut e = Engine::new();
+    e.process_character('c');
+    assert_eq!(e.backspace().unwrap().visible, "");
+    let mut e = Engine::new();
+    e.process_character('g');
+    assert_eq!(e.process_character('g').map(|o| o.visible), Some(String::new()));
     let mut e = Engine::new();
     e.process_character('j');
     let waiting = e.process_character('c').unwrap();

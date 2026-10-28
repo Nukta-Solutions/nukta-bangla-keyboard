@@ -315,7 +315,7 @@ final class EngineTests: XCTestCase {
             "dj", "jd", "cj", "jc", "Cj",
             "dhuW", "hduW",  // বিজয়
             "hfQVfclM", "hfQVflcM",  // বাংলাদেশ
-            "Ff", "Ffmd", "gd", "gx", "jgd",
+            "gd", "gx", "jgd",
             "cnf&", "jVcu", "mbc",
             "crX&Yfcbf",  // পৌঁছানো
             "gfmfv ncfbfv hfQVf",
@@ -335,6 +335,15 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(typeWithEdits("mA").rewrites, 1)
         XCTAssertEqual(typeWithEdits("mA").doc, "র্ম")
         XCTAssertEqual(typeWithEdits("djgk").doc, "ক্তি")
+    }
+
+    /// অ is on screen as soon as Shift+F is typed, so f turns it into আ with one rewrite
+    /// (checked by hand in Facebook and Messenger).
+    func testAToAaRewritesOnce() {
+        XCTAssertEqual(typeWithEdits("Ff").rewrites, 1)
+        XCTAssertEqual(typeWithEdits("Ff").doc, "আ")
+        XCTAssertEqual(typeWithEdits("Ffmd").rewrites, 1)
+        XCTAssertEqual(typeWithEdits("Ffmd").doc, "আমি")
     }
 
     func testTextDiff() {

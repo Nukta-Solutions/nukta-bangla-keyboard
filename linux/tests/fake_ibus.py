@@ -189,4 +189,8 @@ def install():
     gi.repository = repository
     sys.modules["gi"] = gi
     sys.modules["gi.repository"] = repository
+    # The engines look for updates when they get the focus: never from a test.
+    from nukta_bangla import updates
+    updates.check_if_due = lambda: None
+    updates.check_now = lambda: None
     return ibus

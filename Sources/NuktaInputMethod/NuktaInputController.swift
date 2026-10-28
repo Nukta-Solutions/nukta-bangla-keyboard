@@ -31,6 +31,8 @@ final class NuktaInputController: IMKInputController {
             Phonetic.shared.composer.discard()
             Phonetic.shared.panel.hide()
         }
+        // At most once a day; the dialog it may open doesn't take the keyboard.
+        Updates.shared.checkIfDue()
     }
 
     override func deactivateServer(_ sender: Any!) {

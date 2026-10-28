@@ -7,7 +7,9 @@ characters work the macOS ``ClientWriter`` has to do is needed here.
 
 Bijoy lives here; phonetic typing is ``ibus_phonetic.py``, registered as a second engine so a
 Linux user switches layouts with Super+Space like any other input source. Both engines also carry
-the layout menu below, the counterpart of the macOS **নু** menu.
+the layout menu below, the counterpart of the macOS **নু** menu, with the update switch and
+"এখনই আপডেট খুঁজুন" under it. Both engines also run the daily update check when they get the focus
+(``updates.py``).
 """
 
 import gi
@@ -15,8 +17,9 @@ import gi
 gi.require_version("IBus", "1.0")
 from gi.repository import GLib, IBus  # noqa: E402
 
-from . import keymap  # noqa: E402
+from . import keymap, updates  # noqa: E402
 from .engine import Engine  # noqa: E402
+from .settings import Settings  # noqa: E402
 
 # Physical key → character on a US layout, so Bijoy works whatever XKB layout is underneath
 # (the same reason the macOS build maps key codes rather than characters). Keys are evdev
@@ -117,10 +120,34 @@ class LayoutMenu:
                                  True, True, IBus.PropState.UNCHECKED, items)
         properties = IBus.PropList()
         properties.append(menu)
+
+        update_items = IBus.PropList()
+        update_items.append(IBus.Property.new(
+            "update:auto", IBus.PropType.TOGGLE,
+            IBus.Text.new_from_string("দিনে একবার নিজে থেকে আপডেট খুঁজুন"), "", blank, True, True,
+            IBus.PropState.CHECKED if Settings().auto_update_check else IBus.PropState.UNCHECKED,
+            None))
+        update_items.append(IBus.Property.new(
+            "update:check", IBus.PropType.NORMAL, IBus.Text.new_from_string("এখনই আপডেট খুঁজুন"),
+            "", blank, True, True, IBus.PropState.UNCHECKED, None))
+        properties.append(IBus.Property.new("update", IBus.PropType.MENU,
+                                            IBus.Text.new_from_string("আপডেট"), "",
+                                            IBus.Text.new_from_string("নুকতা বাংলা: আপডেট"),
+                                            True, True, IBus.PropState.UNCHECKED, update_items))
         return properties
 
+    def menu_activate(self, name, state):
+        """A menu item was chosen: a layout, or one of the update items."""
+        if name == "update:auto":
+            Settings().set_auto_update_check(state == IBus.PropState.CHECKED)
+            self.register_properties(self.layout_properties())
+        elif name == "update:check":
+            updates.check_now()
+        else:
+            self.switch_layout(name, state)
+
     def switch_layout(self, name, state):
-        """A menu item was chosen: switch to that layout, or ignore anything else."""
+        """A layout was chosen from the menu: switch to it, or ignore anything else."""
         if not name.startswith("layout:"):
             return
         target = name[len("layout:"):]
@@ -174,9 +201,10 @@ class NuktaBanglaEngine(LayoutMenu, IBus.Engine):
         self._engine.reset()
         self._clear_preedit()
         self.register_properties(self.layout_properties())
+        updates.check_if_due()
 
     def do_property_activate(self, name, state):
-        self.switch_layout(name, state)
+        self.menu_activate(name, state)
 
     def do_focus_in_id(self, object_path, client):  # ibus 1.5.27+
         self.do_focus_in()

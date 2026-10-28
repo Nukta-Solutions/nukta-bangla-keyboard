@@ -6,13 +6,21 @@
 //! `about-preview.html`): dark, drawn with Direct2D (`nukta_bangla::gfx`), Bangla in Noto Serif
 //! Bengali. Settings has two columns: the layout and typing mode on the left, suggestions and
 //! shortcuts on the right. With বিজয় only the layout shows, across the whole width: Bijoy uses
-//! none of the rest.
+//! none of the rest. Under the layout (and the typing mode), the update card: the daily check's
+//! switch and "এখনই খুঁজুন".
+//!
+//! The update dialog (`update-preview.html`) is a third window. The top bar opens it when its daily
+//! check finds a new version (`--update-background`: shown without taking the keyboard, so typing
+//! in the app underneath goes on); "এখনই খুঁজুন" opens it too. Its buttons wait a second before they
+//! answer, and Enter and Space press none of them, so a keystroke meant for the app can't.
 //!
 //! The installer also runs it to add the keyboard to the user's languages and to remove it:
 //!
 //! ```text
 //! NuktaBanglaSettings.exe            the settings window
 //! NuktaBanglaSettings.exe --about    the about box
+//! NuktaBanglaSettings.exe --update   the update dialog, for what update.json last found
+//! NuktaBanglaSettings.exe --update-background   the same, without taking the keyboard
 //! NuktaBanglaSettings.exe --enable   add নুকতা বাংলা to this user's keyboards
 //! NuktaBanglaSettings.exe --disable  remove it
 //! ```
@@ -32,10 +40,12 @@ fn main() {
 #[cfg(windows)]
 mod app {
     use std::cell::RefCell;
+    use std::time::{Duration, Instant};
 
     use nukta_bangla::gfx::{wide, Align, Canvas, Color, Gfx, Icon, Rect, Style};
     use nukta_bangla::phonetic::TypingMode;
     use nukta_bangla::settings::{Layout, PopupDirection, PopupPosition, Settings};
+    use nukta_bangla::update::{self, Release};
     use nukta_bangla::win;
     use windows::core::{w, BOOL, PCWSTR};
     use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
@@ -44,18 +54,26 @@ mod app {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::HiDpi::{GetDpiForSystem, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE};
     use windows::Win32::UI::Input::KeyboardAndMouse::{TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT, VK_ESCAPE};
+    use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::*;
 
     const SETTINGS_CLASS: PCWSTR = w!("NuktaBanglaSettings");
     const ABOUT_CLASS: PCWSTR = w!("NuktaBanglaAbout");
+    const UPDATE_CLASS: PCWSTR = w!("NuktaBanglaUpdate");
     /// Re-reads the settings file now and then: the layout can change from the top bar meanwhile.
     const WATCH_TIMER: usize = 1;
+    /// The update dialog's buttons start answering a second after it opens.
+    const GUARD_TIMER: usize = 2;
+    const GUARD: Duration = Duration::from_millis(1000);
+    /// "এখনই খুঁজুন" got its answer: WPARAM is a `Check`.
+    const WM_CHECKED: u32 = WM_APP + 1;
     const WM_MOUSELEAVE: u32 = 0x02A3;
 
     // MARK: The design (settings-preview.html), in DIPs.
 
     const SETTINGS_WIDTH: f32 = 860.0;
     const ABOUT_WIDTH: f32 = 400.0;
+    const UPDATE_WIDTH: f32 = 420.0;
     const PAD: f32 = 24.0;
     const GAP: f32 = 16.0;
     const CARD_PAD: f32 = 16.0;
@@ -85,6 +103,13 @@ mod app {
         view: 24.0,
         paths: &["M3 12h.01", "M3 18h.01", "M3 6h.01", "M8 12h13", "M8 18h13", "M8 6h13"],
     };
+    const REFRESH: Icon = Icon {
+        view: 24.0,
+        paths: &[
+            "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", "M21 3v5h-5",
+            "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", "M8 16H3v5",
+        ],
+    };
     const COMMAND: Icon = Icon {
         view: 24.0,
         paths: &["M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"],
@@ -108,12 +133,48 @@ mod app {
         EnglishWord,
         Position(PopupPosition),
         Direction(PopupDirection),
+        AutoUpdate,
+        CheckNow,
+        // The update dialog.
+        Download,
+        Later,
+        Skip,
+        ReleasePage,
     }
 
     #[derive(Clone, Copy, PartialEq)]
     enum Screen {
         Settings,
         About,
+        Update,
+    }
+
+    /// Where "এখনই খুঁজুন" is.
+    #[derive(Clone, Copy, PartialEq, Debug)]
+    enum Check {
+        Idle,
+        Checking,
+        Failed,
+        Latest,
+        Found,
+    }
+
+    impl Check {
+        fn from_code(code: usize) -> Check {
+            match code {
+                1 => Check::Latest,
+                2 => Check::Found,
+                _ => Check::Failed,
+            }
+        }
+
+        fn code(self) -> usize {
+            match self {
+                Check::Latest => 1,
+                Check::Found => 2,
+                _ => 0,
+            }
+        }
     }
 
     struct App {
@@ -127,6 +188,11 @@ mod app {
         hits: Vec<(Rect, Action)>,
         /// The content height the window was last sized to, in DIPs.
         height: f32,
+        /// The update dialog's release.
+        release: Option<Release>,
+        check: Check,
+        /// When the window opened: the update dialog's buttons wait for `GUARD`.
+        opened: Instant,
     }
 
     thread_local! {
@@ -147,32 +213,47 @@ mod app {
             "--disable" => {
                 if win::enable_for_user(false).is_ok() { 0 } else { 1 }
             }
-            "--about" => run_window(Screen::About),
-            _ => run_window(Screen::Settings),
+            "--about" => run_window(Screen::About, true),
+            "--update" => run_window(Screen::Update, true),
+            "--update-background" => run_window(Screen::Update, false),
+            _ => run_window(Screen::Settings, true),
         }
     }
 
     /// The version in Bangla digits (১.০.১).
     fn bangla_version() -> String {
-        env!("CARGO_PKG_VERSION")
-            .chars()
-            .map(|c| c.to_digit(10).map_or(c, |d| char::from_u32(0x09E6 + d).unwrap_or(c)))
-            .collect()
+        update::bangla_digits(update::CURRENT)
     }
 
     // MARK: The window
 
-    fn run_window(screen: Screen) -> i32 {
+    /// `activate`: false opens the window without taking the keyboard from the app in front.
+    fn run_window(screen: Screen, activate: bool) -> i32 {
         let (class_name, title, width) = match screen {
             Screen::Settings => (SETTINGS_CLASS, "নুকতা বাংলা — সেটিংস", SETTINGS_WIDTH),
             Screen::About => (ABOUT_CLASS, "নুকতা বাংলা সম্পর্কে", ABOUT_WIDTH),
+            Screen::Update => (UPDATE_CLASS, "নুকতা বাংলা আপডেট", UPDATE_WIDTH),
         };
         unsafe {
             // One window of each: a second start brings the first forward.
             if let Ok(existing) = FindWindowW(class_name, None) {
-                let _ = ShowWindow(existing, SW_RESTORE);
-                let _ = SetForegroundWindow(existing);
+                if activate {
+                    let _ = ShowWindow(existing, SW_RESTORE);
+                    let _ = SetForegroundWindow(existing);
+                }
                 return 0;
+            }
+            // The update dialog shows what the last check found, if that is newer than this build.
+            let mut release = None;
+            if screen == Screen::Update {
+                let mut state = update::State::load(&win::data_directory());
+                match &state.latest {
+                    Some(latest) if update::is_newer(&latest.version, update::CURRENT) => release = Some(latest.clone()),
+                    _ => return 0,
+                }
+                // Not again for a day, whichever button is clicked.
+                state.mark_shown(update::now());
+                state.save();
             }
             let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
             let Ok(gfx) = Gfx::new(win::bangla_font_for_program().as_deref()) else { return 1 };
@@ -192,7 +273,7 @@ mod app {
             let title = wide(title);
             let style = match screen {
                 Screen::Settings => WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-                Screen::About => WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+                Screen::About | Screen::Update => WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
             };
             let Ok(window) = CreateWindowExW(
                 WINDOW_EX_STYLE(0), class_name, PCWSTR(title.as_ptr()), style,
@@ -205,15 +286,35 @@ mod app {
             let dpi = GetDpiForSystem().max(96) as f32;
             let settings = Settings::new(&win::prepare_data_directory());
             APP.with(|app| {
-                *app.borrow_mut() = Some(App { window, screen, gfx, settings, dpi, hover: None, hits: Vec::new(), height: 0.0 })
+                *app.borrow_mut() = Some(App {
+                    window, screen, gfx, settings, dpi, hover: None, hits: Vec::new(), height: 0.0,
+                    release, check: Check::Idle, opened: Instant::now(),
+                })
             });
 
             // Sized around the content, centred on the screen.
             let height = content_height();
             resize(window, width, height, dpi, true);
-            let _ = ShowWindow(window, SW_SHOW);
-            if screen == Screen::Settings {
-                SetTimer(Some(window), WATCH_TIMER, 1000, None);
+            if activate {
+                let _ = ShowWindow(window, SW_SHOW);
+            } else {
+                // In front of the other windows, but the app being typed in keeps the keyboard. Not
+                // ShowWindow: its first call in a program follows how the program was started
+                // (activated), whatever it is asked.
+                let _ = SetWindowPos(
+                    window, Some(HWND_TOP), 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                );
+            }
+            with_app(|app| app.opened = Instant::now());
+            match screen {
+                Screen::Settings => {
+                    SetTimer(Some(window), WATCH_TIMER, 1000, None);
+                }
+                Screen::Update => {
+                    SetTimer(Some(window), GUARD_TIMER, GUARD.as_millis() as u32, None);
+                }
+                Screen::About => {}
             }
 
             let mut message = MSG::default();
@@ -248,7 +349,8 @@ mod app {
             if center {
                 let x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
                 let y = ((GetSystemMetrics(SM_CYSCREEN) - h) / 3).max(0);
-                let _ = SetWindowPos(window, None, x, y, w, h, SWP_NOZORDER);
+                // Not activated here, even while hidden: showing the window decides that.
+                let _ = SetWindowPos(window, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
             } else {
                 let _ = SetWindowPos(window, None, 0, 0, w, h, SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE);
             }
@@ -260,8 +362,9 @@ mod app {
         with_app(|app| {
             let mut ctx = Ctx { canvas: None, gfx: &app.gfx, hover: None, hits: Vec::new() };
             let height = match app.screen {
-                Screen::Settings => draw_settings(&mut ctx, &app.settings),
+                Screen::Settings => draw_settings(&mut ctx, &app.settings, app.check),
                 Screen::About => draw_about(&mut ctx),
+                Screen::Update => draw_update(&mut ctx, app.release.as_ref(), true),
             };
             app.height = height;
             height
@@ -369,6 +472,26 @@ mod app {
             }
         }
 
+        /// A plain button; not clickable unless `enabled`.
+        fn button(&mut self, rect: Rect, label: &str, action: Action, enabled: bool) {
+            let hovered = enabled && self.hit(rect, action);
+            self.fill(rect, 6.0, if hovered { BOX_HOVER } else { BOX });
+            self.outline(rect, 6.0, BORDER);
+            self.text(label, rect, Style::new(13.0).align(Align::Center), if enabled { INK } else { FAINT });
+        }
+
+        /// The button in the brand colour; faded until `enabled`.
+        fn primary(&mut self, rect: Rect, label: &str, action: Action, enabled: bool) {
+            let hovered = enabled && self.hit(rect, action);
+            self.brand(rect, 6.0);
+            if hovered {
+                self.fill(rect, 6.0, Color(0xFFFFFF, 0.08));
+            } else if !enabled {
+                self.fill(rect, 6.0, Color(0x0D0807, 0.55));
+            }
+            self.text(label, rect, Style::new(13.0).weight(600).align(Align::Center), WHITE);
+        }
+
         /// An on/off switch, 40 × 22, at its top-left corner.
         fn toggle(&mut self, x: f32, y: f32, on: bool, action: Action) {
             let rect = Rect::new(x, y, 40.0, 22.0);
@@ -397,7 +520,7 @@ mod app {
         }
     }
 
-    fn draw_settings(ctx: &mut Ctx, s: &Settings) -> f32 {
+    fn draw_settings(ctx: &mut Ctx, s: &Settings, check: Check) -> f32 {
         let phonetic = s.layout() == Layout::Phonetic;
         let mut y = 22.0;
 
@@ -422,6 +545,7 @@ mod app {
             right_y = suggestions_card(ctx, s, right, y, column);
             right_y = shortcuts_card(ctx, right, right_y + GAP, column);
         }
+        left_y = update_card(ctx, s, check, PAD, left_y + GAP, left_width);
         let bottom = left_y.max(right_y) + 14.0;
         ctx.text("পরিবর্তন সাথে সাথে সব অ্যাপে চালু হয়", Rect::new(0.0, bottom, SETTINGS_WIDTH, 18.0), Style::new(12.0).align(Align::Center), FAINT);
         bottom + 18.0 + 18.0
@@ -627,6 +751,108 @@ mod app {
         })
     }
 
+    fn update_card(ctx: &mut Ctx, s: &Settings, check: Check, x: f32, y: f32, width: f32) -> f32 {
+        let auto = s.auto_update_check();
+        with_card(ctx, x, y, width, |ctx| {
+            let inner = x + CARD_PAD;
+            let inner_width = width - 2.0 * CARD_PAD;
+            let mut y = ctx.heading(&REFRESH, "আপডেট", inner, y + CARD_PAD, inner_width);
+            ctx.text("নিজে থেকে আপডেট খুঁজুন", Rect::new(inner, y, inner_width - 56.0, 22.0), Style::new(14.0), INK);
+            ctx.text("দিনে একবার দেখে নেয় নতুন সংস্করণ এসেছে কি না", Rect::new(inner, y + 22.0, inner_width - 56.0, 20.0), Style::new(12.5), DIM);
+            ctx.toggle(inner + inner_width - 40.0, y + 10.0, auto, Action::AutoUpdate);
+            y += 42.0 + 10.0;
+            ctx.fill(Rect::new(inner, y, inner_width, 1.0), 0.0, BORDER);
+            y += 10.0;
+            let (status, color) = match check {
+                Check::Idle => (format!("এখন আছে সংস্করণ {}", bangla_version()), DIM),
+                Check::Checking => ("খোঁজা হচ্ছে…".to_owned(), DIM),
+                Check::Latest => ("আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।".to_owned(), INK),
+                Check::Found => ("নতুন সংস্করণ পাওয়া গেছে।".to_owned(), ORANGE),
+                Check::Failed => ("খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।".to_owned(), DIM),
+            };
+            let label = "এখনই খুঁজুন";
+            let button_width = ctx.gfx.text_width(label, Style::new(13.0)) + 32.0;
+            let status_width = inner_width - button_width - 16.0;
+            let status_style = Style::new(12.5).wrap();
+            let status_height = ctx.height(&status, status_style, status_width);
+            let row = status_height.max(34.0);
+            ctx.text(&status, Rect::new(inner, y + (row - status_height) / 2.0, status_width, status_height), status_style, color);
+            ctx.button(Rect::new(inner + inner_width - button_width, y + (row - 34.0) / 2.0, button_width, 34.0), label, Action::CheckNow, check != Check::Checking);
+            y + row
+        })
+    }
+
+    // MARK: Update dialog (update-preview.html)
+
+    /// `ready`: the buttons answer (a second after the dialog opened).
+    fn draw_update(ctx: &mut Ctx, release: Option<&Release>, ready: bool) -> f32 {
+        let Some(release) = release else { return 200.0 };
+        let w = UPDATE_WIDTH;
+        let pad = 26.0;
+        let mut y = 26.0;
+
+        // The head: logo, and from which version to which.
+        if let Some(c) = ctx.canvas {
+            c.glow(pad + 31.0, y + 23.5, 56.0, Color(0xE87A1E, 0.28));
+            c.logo(pad, y, 62.0);
+        }
+        let text_left = pad + 62.0 + 16.0;
+        let text_width = w - text_left - pad;
+        ctx.text("নতুন সংস্করণ এসেছে", Rect::new(text_left, y - 1.0, text_width, 28.0), Style::new(19.0).weight(700), INK);
+        let yours = format!("আপনার: {}", bangla_version());
+        let yours_width = ctx.gfx.text_width(&yours, Style::new(13.0));
+        ctx.text(&yours, Rect::new(text_left, y + 27.0, yours_width + 2.0, 20.0), Style::new(13.0), DIM);
+        let arrow_x = text_left + yours_width + 8.0;
+        ctx.text("→", Rect::new(arrow_x, y + 27.0, 16.0, 20.0), Style::new(13.0), DIM);
+        let new = format!("নতুন: {}", update::bangla_digits(&release.version));
+        let new_x = arrow_x + 16.0 + 8.0;
+        ctx.text(&new, Rect::new(new_x, y + 27.0, w - pad - new_x, 20.0), Style::new(13.0).weight(600), ORANGE);
+        y += 47.0;
+
+        // What's new: the release's bullet lines.
+        if !release.notes.is_empty() {
+            y += 20.0;
+            let card_width = w - 2.0 * pad;
+            let inner = pad + 14.0;
+            let inner_width = card_width - 28.0;
+            let note_style = Style::new(13.0).wrap();
+            let heights: Vec<f32> = release.notes.iter().map(|note| ctx.height(note, note_style, inner_width - 14.0)).collect();
+            let notes_height = heights.iter().sum::<f32>() + 4.0 * (heights.len() as f32 - 1.0);
+            let card_height = 12.0 + 20.0 + 6.0 + notes_height + 10.0 + 18.0 + 12.0;
+            card(ctx, pad, y, card_width, card_height);
+            ctx.text("নতুন যা আছে", Rect::new(inner, y + 12.0, inner_width, 20.0), Style::new(12.0).weight(600), ORANGE);
+            let mut row = y + 12.0 + 20.0 + 6.0;
+            for (note, height) in release.notes.iter().zip(&heights) {
+                ctx.text("•", Rect::new(inner, row, 14.0, 20.0), Style::new(13.0), DIM);
+                ctx.text(note, Rect::new(inner + 14.0, row, inner_width - 14.0, *height), note_style, INK);
+                row += height + 4.0;
+            }
+            row += 6.0;
+            let more = "সব পরিবর্তন দেখুন";
+            let more_width = ctx.gfx.text_width(more, Style::new(12.0));
+            let hovered = ctx.hit(Rect::new(inner, row, more_width, 18.0), Action::ReleasePage);
+            let color = if hovered { INK } else { DIM };
+            ctx.text(more, Rect::new(inner, row, more_width + 2.0, 18.0), Style::new(12.0), color);
+            ctx.fill(Rect::new(inner, row + 17.0, more_width, 1.0), 0.0, if hovered { INK } else { FAINT });
+            y += card_height;
+        }
+
+        // The buttons. None is the default: Enter and Space press nothing here.
+        y += 20.0;
+        let skip = "এই সংস্করণ বাদ দিন";
+        let skip_width = ctx.gfx.text_width(skip, Style::new(13.0)) + 8.0;
+        let hovered = ready && ctx.hit(Rect::new(pad - 4.0, y, skip_width, 34.0), Action::Skip);
+        ctx.text(skip, Rect::new(pad, y, skip_width, 34.0), Style::new(13.0), if hovered { INK } else { DIM });
+        let download = "ডাউনলোড";
+        let download_width = ctx.gfx.text_width(download, Style::new(13.0).weight(600)) + 36.0;
+        let later = "পরে";
+        let later_width = ctx.gfx.text_width(later, Style::new(13.0)) + 28.0;
+        let right = w - pad;
+        ctx.primary(Rect::new(right - download_width, y, download_width, 34.0), download, Action::Download, ready);
+        ctx.button(Rect::new(right - download_width - 8.0 - later_width, y, later_width, 34.0), later, Action::Later, ready);
+        y + 34.0 + 22.0
+    }
+
     // MARK: About (about-preview.html)
 
     fn draw_about(ctx: &mut Ctx) -> f32 {
@@ -692,6 +918,11 @@ mod app {
     // MARK: Changes
 
     fn act(action: Action) {
+        match action {
+            Action::CheckNow => return check_now(),
+            Action::Download | Action::Later | Action::Skip | Action::ReleasePage => return update_choice(action),
+            _ => {}
+        }
         with_app(|app| {
             let s = &mut app.settings;
             match action {
@@ -712,9 +943,91 @@ mod app {
                 }
                 Action::Position(position) => s.set_popup_position(position),
                 Action::Direction(direction) => s.set_popup_direction(direction),
+                Action::AutoUpdate => {
+                    let on = s.auto_update_check();
+                    s.set_auto_update_check(!on)
+                }
+                _ => {}
             }
         });
         refresh();
+    }
+
+    fn open_url(url: &str) {
+        let url = wide(url);
+        unsafe {
+            ShellExecuteW(None, w!("open"), PCWSTR(url.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+        }
+    }
+
+    /// "এখনই খুঁজুন": asks GitHub now, whatever the daily check last did; the answer comes back as
+    /// `WM_CHECKED`.
+    fn check_now() {
+        let Some(window) = with_app(|app| {
+            (app.check != Check::Checking).then(|| {
+                app.check = Check::Checking;
+                app.window
+            })
+        })
+        .flatten() else {
+            return;
+        };
+        refresh();
+        let target = window.0 as isize;
+        std::thread::spawn(move || {
+            let check = match update::fetch_latest() {
+                Some(release) => {
+                    let newer = update::is_newer(&release.version, update::CURRENT);
+                    let mut state = update::State::load(&win::data_directory());
+                    state.record(release, update::now());
+                    state.save();
+                    if newer { Check::Found } else { Check::Latest }
+                }
+                None => Check::Failed,
+            };
+            unsafe {
+                let _ = PostMessageW(Some(HWND(target as *mut _)), WM_CHECKED, WPARAM(check.code()), LPARAM(0));
+            }
+        });
+    }
+
+    /// The answer to "এখনই খুঁজুন". A new version opens the update dialog, even one skipped before:
+    /// the user asked.
+    fn checked(check: Check) {
+        with_app(|app| app.check = check);
+        refresh();
+        if check == Check::Found {
+            if let Ok(this) = std::env::current_exe() {
+                let program = wide(&this.to_string_lossy());
+                unsafe {
+                    ShellExecuteW(None, w!("open"), PCWSTR(program.as_ptr()), w!("--update"), PCWSTR::null(), SW_SHOWNORMAL);
+                }
+            }
+        }
+    }
+
+    /// A button in the update dialog. All but "সব পরিবর্তন দেখুন" close it.
+    fn update_choice(action: Action) {
+        let Some((window, release)) = with_app(|app| (app.window, app.release.clone())) else { return };
+        let Some(release) = release else { return };
+        let mut state = update::State::load(&win::data_directory());
+        match action {
+            Action::ReleasePage => return open_url(&release.url),
+            Action::Download => open_url(update::WEBSITE),
+            Action::Skip => state.skip(&release.version),
+            _ => {}
+        }
+        // "পরে" and ডাউনলোড: ask again in a day, in case it wasn't installed.
+        state.mark_shown(update::now());
+        state.save();
+        unsafe {
+            let _ = DestroyWindow(window);
+        }
+    }
+
+    /// The update dialog's buttons don't answer for a moment after it opens.
+    fn guarded() -> bool {
+        with_app(|app| app.screen == Screen::Update && app.opened.elapsed() < GUARD).unwrap_or(false)
     }
 
     fn action_at(lparam: LPARAM) -> Option<Action> {
@@ -755,10 +1068,13 @@ mod app {
                         let mut ctx = Ctx { canvas: Some(canvas), gfx: &app.gfx, hover: app.hover, hits: Vec::new() };
                         match app.screen {
                             Screen::Settings => {
-                                draw_settings(&mut ctx, &app.settings);
+                                draw_settings(&mut ctx, &app.settings, app.check);
                             }
                             Screen::About => {
                                 draw_about(&mut ctx);
+                            }
+                            Screen::Update => {
+                                draw_update(&mut ctx, app.release.as_ref(), app.opened.elapsed() >= GUARD);
                             }
                         }
                         hits = ctx.hits;
@@ -801,16 +1117,32 @@ mod app {
             }
             WM_LBUTTONUP => {
                 if let Some(action) = action_at(lparam) {
-                    act(action);
+                    if !guarded() {
+                        act(action);
+                    }
                 }
                 LRESULT(0)
             }
             WM_KEYDOWN if wparam.0 as u16 == VK_ESCAPE.0 => {
-                // Esc closes the About box.
-                if with_app(|app| app.screen == Screen::About).unwrap_or(false) {
-                    unsafe {
+                // Esc closes the About box; in the update dialog it is "পরে".
+                match with_app(|app| app.screen) {
+                    Some(Screen::About) => unsafe {
                         let _ = DestroyWindow(window);
-                    }
+                    },
+                    Some(Screen::Update) if !guarded() => update_choice(Action::Later),
+                    _ => {}
+                }
+                LRESULT(0)
+            }
+            WM_CHECKED => {
+                checked(Check::from_code(wparam.0));
+                LRESULT(0)
+            }
+            WM_TIMER if wparam.0 == GUARD_TIMER => {
+                // The update dialog's buttons answer now.
+                unsafe {
+                    let _ = KillTimer(Some(window), GUARD_TIMER);
+                    let _ = InvalidateRect(Some(window), None, false);
                 }
                 LRESULT(0)
             }

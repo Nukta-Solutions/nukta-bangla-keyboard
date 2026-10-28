@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nukta Bangla Update</title>
+<style>
+  /* Bangla in Noto Serif Bengali (bundled with the app), everything else in Aptos / Segoe UI. */
+  @font-face {
+    font-family: "Nukta Bengali";
+    src: url("../assets/fonts/NotoSerifBengali.ttf") format("truetype");
+    font-weight: 100 900;
+    unicode-range: U+0980-09FF, U+200C-200D, U+25CC, U+0964-0965;
+  }
+  :root {
+    --bg: #0D0807;
+    --card: #161110;
+    --box: #241C1A;
+    --border: #2D2827;
+    --ink: rgba(255,255,255,.92);
+    --dim: rgba(255,255,255,.56);
+    --faint: rgba(255,255,255,.34);
+    --brand: linear-gradient(63.35deg, #D13A0E 0%, #E87A1E 100%);
+    --font: "Nukta Bengali", "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #6E6E6E; font-family: var(--font); color: var(--ink); padding: 40px; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .label { font-size: 12px; color: rgba(255,255,255,.8); letter-spacing: .02em; }
+
+  .window { width: 420px; border-radius: 10px; overflow: hidden; background: var(--bg);
+            box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06); }
+
+  /* Windows title bar */
+  .titlebar { height: 36px; display: flex; align-items: center; padding-left: 14px; background: #1A1312;
+              font-size: 12.5px; color: var(--dim); }
+  .titlebar .spacer { flex: 1; }
+  .titlebar .btn { width: 46px; height: 36px; display: grid; place-items: center; }
+  .titlebar .btn:hover { background: #C42B1C; }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* macOS title bar */
+  .mac-titlebar { height: 32px; display: flex; align-items: center; justify-content: center; position: relative;
+                  background: #1A1312; font-size: 12.5px; color: var(--dim); }
+  .lights { position: absolute; left: 12px; display: flex; gap: 8px; }
+  .lights span { width: 12px; height: 12px; border-radius: 50%; }
+  .lights .r { background: #FF5F57; } .lights .y { background: #3A3230; } .lights .g { background: #3A3230; }
+
+  .content { padding: 26px 26px 22px; }
+  .head { display: flex; gap: 16px; align-items: center; }
+  .glow { position: relative; flex: none; }
+  .glow::before { content: ""; position: absolute; inset: -18px -26px; background: radial-gradient(closest-side, rgba(232,122,30,.28), transparent); }
+  .glow svg { position: relative; width: 62px; height: 47px; display: block; }
+  h1 { margin: 0 0 4px; font-size: 19px; font-weight: 700; }
+  .versions { font-size: 13px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  .versions .new { color: #E87A1E; font-weight: 600; }
+
+  .notes { margin-top: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .notes .h { font-size: 12px; color: #E87A1E; font-weight: 600; margin-bottom: 6px; }
+  .notes ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.75; }
+  .notes .more { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
+
+  .buttons { margin-top: 20px; display: flex; align-items: center; gap: 8px; }
+  .buttons .spacer { flex: 1; }
+  button { font: 13px var(--font); color: var(--ink); border-radius: 6px; padding: 7px 14px; cursor: pointer;
+           background: var(--box); border: 1px solid var(--border); }
+  button:hover { background: #2E2422; }
+  button.link { background: none; border: none; color: var(--dim); padding: 7px 4px; }
+  button.link:hover { color: var(--ink); background: none; }
+  button.primary { background: var(--brand); border: none; color: #fff; font-weight: 600; padding: 8px 18px; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.primary:disabled { opacity: .45; cursor: default; filter: none; }
+
+  .note { width: 300px; font: 13px/1.6 var(--font); color: #fff; background: rgba(0,0,0,.35); padding: 14px 16px; border-radius: 8px; }
+  .note b { color: #FFD7B5; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="nu-on" x1="1.761" y1="20.8" x2="35.665" y2="3.782" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D13A0E"/><stop offset="1" stop-color="#E87A1E"/>
+    </linearGradient>
+    <symbol id="logo" viewBox="0 0 37 28">
+      <rect width="37" height="28" rx="6" fill="url(#nu-on)"/>
+      <path transform="translate(10 4.989)" fill="#fff" fill-opacity=".9" d="M10.541 13.665L9.372 12.773C9.33 12.277 9.245 11.749 9.117 11.189C8.99 10.63 8.82 10.084 8.607 9.553C8.395 9.022 8.147 8.543 7.863 8.118C7.58 7.693 7.254 7.35 6.886 7.088C6.517 6.826 6.121 6.694 5.696 6.694C5.54 6.694 5.38 6.712 5.217 6.748C5.055 6.783 4.916 6.836 4.803 6.907L5.419 5.802C5.632 5.944 5.788 6.142 5.887 6.397C5.986 6.652 6.036 6.907 6.036 7.162C6.036 7.559 5.951 7.916 5.781 8.235C5.611 8.554 5.366 8.806 5.047 8.99C4.729 9.174 4.328 9.266 3.847 9.266C3.039 9.266 2.423 9.025 1.998 8.543C1.573 8.062 1.36 7.452 1.36 6.716C1.36 5.894 1.622 5.256 2.146 4.803C2.671 4.35 3.351 4.123 4.187 4.123C4.81 4.123 5.387 4.233 5.919 4.452C6.45 4.672 6.921 4.977 7.332 5.366C7.743 5.756 8.104 6.202 8.416 6.705C8.728 7.208 8.983 7.739 9.181 8.299C9.379 8.859 9.514 9.415 9.585 9.967L9.287 9.989C9.273 9.705 9.248 9.326 9.213 8.852C9.177 8.377 9.146 7.87 9.117 7.332C9.089 6.794 9.075 6.305 9.075 5.866L9.075 1.36L0.829 1.36L0 0L12.263 0L13.091 1.36L10.69 1.36L10.69 13.644L10.541 13.665ZM4.608 14.877C4.608 14.154 4.873 13.563 5.405 13.102C5.936 12.642 6.69 12.411 7.668 12.411C8.461 12.411 9.223 12.553 9.953 12.836C10.682 13.12 11.362 13.502 11.993 13.984C12.623 14.466 13.194 15.008 13.704 15.61C14.214 16.212 14.646 16.839 15 17.491L14.192 18.022C13.64 17.186 13.027 16.463 12.354 15.854C11.681 15.245 10.934 14.77 10.112 14.43C9.29 14.09 8.391 13.92 7.413 13.92C6.917 13.92 6.559 14.002 6.34 14.165C6.12 14.328 6.01 14.551 6.01 14.834C6.01 15.117 6.117 15.348 6.329 15.525C6.542 15.702 6.846 15.79 7.243 15.79C7.625 15.79 7.965 15.702 8.263 15.525C8.561 15.348 8.798 15.061 8.975 14.664C9.152 14.267 9.241 13.736 9.241 13.07L10.686 13.772C10.686 14.437 10.558 15.043 10.303 15.589C10.048 16.134 9.673 16.57 9.177 16.896C8.681 17.221 8.072 17.384 7.349 17.384C6.556 17.384 5.9 17.151 5.383 16.683C4.866 16.216 4.608 15.613 4.608 14.877Z"/>
+      <circle cx="25.5" cy="17.489" r="1.5" fill="#fff" fill-opacity=".9"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- Windows -->
+<div class="col">
+  <div class="label">Windows</div>
+  <div class="window">
+    <div class="titlebar">
+      <span>নুকতা বাংলা আপডেট</span>
+      <span class="spacer"></span>
+      <span class="btn"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="glow"><svg viewBox="0 0 37 28"><use href="#logo"/></svg></div>
+        <div>
+          <h1>নতুন সংস্করণ এসেছে</h1>
+          <div class="versions">আপনার: ১.০.২ <span>→</span> <span class="new">নতুন: ১.০.৩</span></div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="h">নতুন যা আছে</div>
+        <ul>
+          <li>ফোনেটিক সাজেশন আরও দ্রুত</li>
+          <li>বিজয়ে কয়েকটি যুক্তাক্ষর ঠিক করা হয়েছে</li>
+          <li>সেটিংসে নতুন ফন্ট অপশন</li>
+        </ul>
+        <span class="more">সব পরিবর্তন দেখুন</span>
+      </div>
+
+      <div class="buttons">
+        <button class="link">এই সংস্করণ বাদ দিন</button>
+        <span class="spacer"></span>
+        <button>পরে</button>
+        <button class="primary">ডাউনলোড</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- macOS -->
+<div class="col">
+  <div class="label">macOS</div>
+  <div class="window">
+    <div class="mac-titlebar">
+      <span class="lights"><span class="r"></span><span class="y"></span><span class="g"></span></span>
+      <span>নুকতা বাংলা আপডেট</span>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="glow"><svg viewBox="0 0 37 28"><use href="#logo"/></svg></div>
+        <div>
+          <h1>নতুন সংস্করণ এসেছে</h1>
+          <div class="versions">আপনার: ১.০.২ <span>→</span> <span class="new">নতুন: ১.০.৩</span></div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="h">নতুন যা আছে</div>
+        <ul>
+          <li>ফোনেটিক সাজেশন আরও দ্রুত</li>
+          <li>বিজয়ে কয়েকটি যুক্তাক্ষর ঠিক করা হয়েছে</li>
+          <li>সেটিংসে নতুন ফন্ট অপশন</li>
+        </ul>
+        <span class="more">সব পরিবর্তন দেখুন</span>
+      </div>
+
+      <div class="buttons">
+        <button class="link">এই সংস্করণ বাদ দিন</button>
+        <span class="spacer"></span>
+        <button>পরে</button>
+        <button class="primary" id="mac-dl" disabled>ডাউনলোড</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <b>আপডেট ডায়ালগ: প্রিভিউ</b><br>
+  • কখন দেখাবে: কম্পিউটার চালু/লগইনের পরে, বা নুকতা বাংলায় সুইচ করলে। টাইপের মাঝখানে কখনো না।<br>
+  • প্রথম ১ সেকেন্ড বোতামগুলো Enter/Space-এ সাড়া দেয় না (ডান দিকের macOS প্রিভিউতে ডাউনলোড বোতাম তাই প্রথমে ঝাপসা)।<br>
+  • ডাউনলোড ডিফল্ট বোতাম নয়। Esc বা ✕ মানে "পরে"।<br>
+  • "পরে": পরের দিন আবার জিজ্ঞেস করবে। "বাদ দিন": পরের রিলিজ পর্যন্ত চুপ।<br>
+  • "নতুন যা আছে" আসে GitHub রিলিজ নোট থেকে।<br>
+  • Linux-এ একই ডিজাইন, শুধু টাইটেল বার ডেস্কটপ অনুযায়ী।
+</div>
+
+<script>
+  // Demo of the 1-second key guard: Download unlocks after a moment.
+  setTimeout(function () { document.getElementById("mac-dl").disabled = false; }, 1000);
+</script>
+</body>
+</html>

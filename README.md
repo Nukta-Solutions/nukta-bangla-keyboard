@@ -219,6 +219,19 @@ must show a key under it) → Export… → .p12, with a password. Then
 App Store Connect → Users and Access → Integrations → App Store Connect API → Team Keys → **+**, role
 Developer; it can be downloaded once. `gh secret set APP_STORE_CONNECT_API_KEY_P8 < AuthKey_XXXXXXXXXX.p8`.
 
+### The update notice
+Every installed copy asks GitHub for the latest release once a day (macOS: when you switch to the
+keyboard; Windows: the top bar; Linux: when a layout gets the focus) and, if its tag is a newer version
+than the installed one, shows the update dialog. So:
+- The tag must match the versions in Info.plist, `windows/Cargo.toml` and
+  `linux/nukta_bangla/__init__.py` (the release workflow checks this): a copy whose version is behind
+  the tag keeps being told to update.
+- In the release description, the lines starting with `- ` (at most five) are the dialog's
+  "নতুন যা আছে", shown as you write them, so write them in Bangla. Everything else (paragraphs,
+  headings, install steps) is only on the GitHub page. No bullet lines: the dialog has no notes box.
+- **ডাউনলোড** opens <https://www.nuktasolutions.com/nukta-bangla-keyboard>, so link the new release there.
+- Drafts and pre-releases are never offered: a release only reaches users once it is published.
+
 ## Development
 Needs Rust for riti: `curl https://sh.rustup.rs -sSf | sh` (once).
 ```

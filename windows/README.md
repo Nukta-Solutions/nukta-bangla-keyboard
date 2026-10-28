@@ -36,6 +36,14 @@ applied straight away in every app. They are kept in `%APPDATA%\Nukta Bangla\set
 same keys and values as the macOS and Linux builds ([linux/README.md](../linux/README.md) lists them);
 what phonetic typing learns is kept in the same folder.
 
+## Updates
+A minute after it starts, and then once a day, the top bar asks GitHub for the latest release. If it is
+newer than the installed version, the update dialog opens (without taking the keyboard from the app
+being typed in) with the release's bullet points under "নতুন যা আছে": **ডাউনলোড** opens the keyboard's
+website, **পরে** asks again the next day, and **এই সংস্করণ বাদ দিন** stays quiet until the next release.
+Settings' **আপডেট** card turns the daily check off and on, and **এখনই খুঁজুন** checks straight away.
+What the last check found is kept in `%APPDATA%\Nukta Bangla\update.json`.
+
 ## Uninstall
 Settings → Apps → Installed apps → **নুকতা বাংলা** → Uninstall. Your settings and what phonetic typing
 learnt stay in `%APPDATA%\Nukta Bangla`; delete that folder too for a clean slate.

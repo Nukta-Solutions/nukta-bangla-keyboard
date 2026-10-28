@@ -155,6 +155,11 @@ impl Settings {
         }
     }
 
+    /// Look for a new version once a day (`update.rs`). On unless turned off.
+    pub fn auto_update_check(&self) -> bool {
+        self.flag("autoUpdateCheck", true)
+    }
+
     pub fn phonetic_options(&self) -> PhoneticOptions {
         PhoneticOptions {
             mode: self.typing_mode(),
@@ -212,6 +217,10 @@ impl Settings {
 
     pub fn set_colon_is_bisarga(&mut self, on: bool) {
         self.set("colonIsBisarga", on.into());
+    }
+
+    pub fn set_auto_update_check(&mut self, on: bool) {
+        self.set("autoUpdateCheck", on.into());
     }
 
     pub fn set_popup_position(&mut self, position: PopupPosition) {

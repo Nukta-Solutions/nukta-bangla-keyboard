@@ -21,6 +21,9 @@
 //! - The bar and its menus are drawn with Direct2D (smooth 1px Lucide icons, the logo from its SVG,
 //!   DirectWrite text with Bangla shaping) into layered windows, so their corners are truly round.
 //!   The bar never takes the keyboard focus, so typing goes on in the app underneath.
+//! - Updates: a minute after start, then hourly, it asks GitHub for the latest release if a day has
+//!   passed since the last answer (`nukta_bangla::update`), and opens the update dialog
+//!   (`NuktaBanglaSettings.exe --update-background`) when there is a new version to tell about.
 //!
 //! ```text
 //! NuktaBangla.exe            start (or, if running, show the bar)
@@ -46,7 +49,7 @@ mod app {
 
     use nukta_bangla::gfx::{wide, Align, Color, Canvas, Gfx, Icon, Rect, Style};
     use nukta_bangla::settings::{Layout, Settings};
-    use nukta_bangla::{sound, win};
+    use nukta_bangla::{sound, update, win};
     use windows::core::{w, PCWSTR};
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
     use windows::Win32::Graphics::Gdi::{
@@ -89,6 +92,10 @@ mod app {
     /// A single click on the tray icon toggles once Windows' double-click time has passed without
     /// a second click; a double-click shows the top bar instead.
     const CLICK_TIMER: usize = 3;
+    /// Update checks: first a minute after start, then hourly (see `update_tick`).
+    const UPDATE_TIMER: usize = 5;
+    /// A background update check finished.
+    const WM_UPDATE_CHECKED: u32 = WM_APP + 3;
 
     // MARK: The locked design (windows/design/top-bar.md), in DIPs.
 
@@ -221,6 +228,8 @@ mod app {
         /// A click on a bar button whose menu was open closed that menu: the button-up that follows
         /// must not open it again.
         swallow_up: Option<Part>,
+        /// An update check is waiting for GitHub.
+        checking_update: bool,
     }
 
     thread_local! {
@@ -304,6 +313,7 @@ mod app {
             promote_tries: 0,
             ignore_tray_up: false,
             swallow_up: None,
+            checking_update: false,
         };
         APP.with(|slot| *slot.borrow_mut() = Some(app));
 
@@ -311,6 +321,7 @@ mod app {
         draw_bar();
         update_tray_icon(NIM_ADD);
         SetTimer(Some(window), WATCH_TIMER, 250, None);
+        SetTimer(Some(window), UPDATE_TIMER, 60 * 1000, None);
         if !with_app(|app| app.settings.tray_promoted()).unwrap_or(true) {
             SetTimer(Some(window), PROMOTE_TIMER, 3000, None);
         }
@@ -426,6 +437,59 @@ mod app {
         let Ok(this) = std::env::current_exe() else { return };
         let program = wide(&this.with_file_name("NuktaBanglaSettings.exe").to_string_lossy());
         open(PCWSTR(program.as_ptr()), arguments);
+    }
+
+    // MARK: Updates
+
+    /// Asks GitHub for the latest release if a day has passed since it last answered, or else shows
+    /// what an earlier check found. Nothing at all while update checks are off in settings.
+    fn update_tick() {
+        let Some((window, on, checking)) =
+            with_app(|app| (app.window, app.settings.auto_update_check(), app.checking_update))
+        else {
+            return;
+        };
+        unsafe {
+            // After the first minute: hourly.
+            SetTimer(Some(window), UPDATE_TIMER, 60 * 60 * 1000, None);
+        }
+        if !on || checking {
+            return;
+        }
+        let directory = win::data_directory();
+        if !update::State::load(&directory).check_due(update::now()) {
+            show_update_if_pending();
+            return;
+        }
+        with_app(|app| app.checking_update = true);
+        let target = window.0 as isize;
+        std::thread::spawn(move || {
+            if let Some(release) = update::fetch_latest() {
+                let mut state = update::State::load(&directory);
+                state.record(release, update::now());
+                state.save();
+            }
+            unsafe {
+                let _ = PostMessageW(Some(HWND(target as *mut _)), WM_UPDATE_CHECKED, WPARAM(0), LPARAM(0));
+            }
+        });
+    }
+
+    /// Opens the update dialog if there is a new version the user hasn't skipped or put off. It
+    /// opens without taking the keyboard, so typing in the app underneath goes on.
+    fn show_update_if_pending() {
+        if !with_app(|app| app.settings.auto_update_check()).unwrap_or(false) {
+            return;
+        }
+        let mut state = update::State::load(&win::data_directory());
+        let now = update::now();
+        if state.pending(update::CURRENT, now).is_none() {
+            return;
+        }
+        // Not again for a day, whichever button is clicked.
+        state.mark_shown(now);
+        state.save();
+        open_settings(Some(w!("--update-background")));
     }
 
     // MARK: Where the bar sits
@@ -1532,6 +1596,15 @@ mod app {
                     let _ = KillTimer(Some(window), CLICK_TIMER);
                 }
                 toggle();
+                LRESULT(0)
+            }
+            WM_TIMER if wparam.0 == UPDATE_TIMER => {
+                update_tick();
+                LRESULT(0)
+            }
+            WM_UPDATE_CHECKED => {
+                with_app(|app| app.checking_update = false);
+                show_update_if_pending();
                 LRESULT(0)
             }
             WM_TIMER if wparam.0 == PROMOTE_TIMER => {

@@ -14,6 +14,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let colonPopup = NSPopUpButton()
     private let positionPopup = NSPopUpButton()
     private let directionPopup = NSPopUpButton()
+    private let autoUpdate = NSButton(checkboxWithTitle: "দিনে একবার নিজে থেকে আপডেট খুঁজুন", target: nil, action: nil)
+    private let checkNowButton = NSButton(title: "এখনই খুঁজুন", target: nil, action: nil)
+    private let updateStatus = NSTextField(wrappingLabelWithString: "")
     /// Everything that only matters for phonetic typing.
     private var phoneticControls: [NSControl] = []
     /// Everything that only matters while the suggestion list is in use.
@@ -55,10 +58,19 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         for (_, title) in Self.colonChoices { colonPopup.addItem(withTitle: title) }
         for (_, title) in Self.positions { positionPopup.addItem(withTitle: title) }
         for (_, title) in Self.directions { directionPopup.addItem(withTitle: title) }
-        for control in [layoutPopup, colonPopup, positionPopup, directionPopup, autocorrect, emoji, englishWord] {
+        for control in [layoutPopup, colonPopup, positionPopup, directionPopup, autocorrect, emoji, englishWord, autoUpdate] {
             control.target = self
             control.action = #selector(changed(_:))
         }
+        checkNowButton.bezelStyle = .rounded
+        checkNowButton.target = self
+        checkNowButton.action = #selector(checkNow(_:))
+        updateStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        updateStatus.textColor = .secondaryLabelColor
+        updateStatus.preferredMaxLayoutWidth = 300
+        updateStatus.stringValue = "এখন আছে সংস্করণ \(Updates.banglaDigits(Updates.current))"
+        let checkRow = NSStackView(views: [checkNowButton, updateStatus])
+        checkRow.spacing = 10
 
         let modeStack = NSStackView()
         modeStack.orientation = .vertical
@@ -91,6 +103,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             Self.row("তালিকা দেখাও:", positionPopup),
             Self.row("সাজানো:", directionPopup),
             Self.note("Space বা Enter: বাছাই করা শব্দ বসবে · ↑↓ বা Tab: বাছাই বদলাও · ১–৯: সরাসরি বাছাই · Esc: বাদ দাও"),
+            Self.separator(),
+            Self.header("আপডেট"),
+            autoUpdate,
+            checkRow,
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -156,6 +172,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         colonPopup.selectItem(at: Self.colonChoices.firstIndex { $0.0 == Settings.colonIsBisarga } ?? 0)
         positionPopup.selectItem(at: Self.positions.firstIndex { $0.0 == Settings.popupPosition } ?? 0)
         directionPopup.selectItem(at: Self.directions.firstIndex { $0.0 == Settings.popupDirection } ?? 0)
+        autoUpdate.state = Settings.autoUpdateCheck ? .on : .off
         // Bijoy uses none of these, and phonetic-only has no list.
         let phonetic = Settings.layout == .phonetic
         for control in phoneticControls {
@@ -182,11 +199,33 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             Settings.popupPosition = Self.positions[positionPopup.indexOfSelectedItem].0
         case directionPopup:
             Settings.popupDirection = Self.directions[directionPopup.indexOfSelectedItem].0
+        case autoUpdate:
+            Settings.autoUpdateCheck = autoUpdate.state == .on
         default:
             if let mode = modeButtons.first(where: { $0.1 === sender })?.0 {
                 Settings.typingMode = mode
             }
         }
         refresh()
+    }
+
+    /// "এখনই খুঁজুন": asks GitHub now. A new version opens the update dialog, even one skipped
+    /// before: the user asked.
+    @objc private func checkNow(_ sender: Any?) {
+        checkNowButton.isEnabled = false
+        updateStatus.stringValue = "খোঁজা হচ্ছে…"
+        Updates.shared.checkNow { [weak self] result in
+            guard let self else { return }
+            self.checkNowButton.isEnabled = true
+            switch result {
+            case .found(let release):
+                self.updateStatus.stringValue = "নতুন সংস্করণ পাওয়া গেছে।"
+                UpdateWindow.shared.show(release, activate: true)
+            case .latest:
+                self.updateStatus.stringValue = "আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।"
+            case .failed:
+                self.updateStatus.stringValue = "খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"
+            }
+        }
     }
 }

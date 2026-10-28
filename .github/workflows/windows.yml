@@ -2,9 +2,9 @@
 name: Windows
 
 on:
+  # Only main: a direct push or a merged pull request. Other branches never run it.
   push:
-    paths: ["windows/**", "riti-bridge/**", "Licenses/**", ".github/workflows/windows.yml"]
-  pull_request:
+    branches: [main]
     paths: ["windows/**", "riti-bridge/**", "Licenses/**", ".github/workflows/windows.yml"]
   workflow_dispatch:
 

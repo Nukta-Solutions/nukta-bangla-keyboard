@@ -18,3 +18,8 @@
   build on their own Mac (Developer ID certificates and the `nukta` notarytool profile are in its
   keychain): after the workflow leaves a draft with the .exe and .sh, `scripts/release-mac.sh <tag>`
   builds and notarizes the .dmg, uploads it, and publishes.
+
+## CI rules
+- GitHub Actions run only for `main`: `windows.yml` on pushes to main (including merged pull
+  requests), `release.yml` on `v*` tags, and it refuses tags whose commit is not on main. Never add
+  triggers for other branches or for pull requests.

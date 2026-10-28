@@ -142,7 +142,7 @@ and the .dmg and staples their tickets, so it installs with no Gatekeeper warnin
 - the **Developer ID Application** and **Developer ID Installer** certificates
   (Xcode → Settings → Accounts → Manage Certificates);
 - a notarytool profile named `nukta`, created once with an app-specific password from account.apple.com:
-  `xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id Y2466L4CFL`.
+  `xcrun notarytool store-credentials nukta --apple-id <Apple ID> --team-id <Team ID>`.
 
 `scripts/package.sh --no-notarize` makes a signed but un-notarized .pkg and .dmg for a quick test.
 

@@ -8,3 +8,4 @@ __pycache__/
 riti-bridge/target/
 riti-bridge/lib/
 windows/target/
+.vscode/

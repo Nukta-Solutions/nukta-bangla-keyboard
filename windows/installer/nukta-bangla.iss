@@ -87,12 +87,18 @@ Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 WelcomeLabel1=নুকতা বাংলা-য় স্বাগতম
 WelcomeLabel2=এটি আপনার কম্পিউটারে নুকতা বাংলা {#AppVersion} ইনস্টল করবে: বিজয় লেআউট আর ফোনেটিক টাইপিং, ইউনিকোডে।%n%nইনস্টলের পর স্ক্রিনের উপরে নুকতা বাংলার বার আর টাস্কবারের ট্রেতে আইকন দেখবেন। F12 চাপলে বা আইকনে ক্লিক করলে বাংলা চালু বা বন্ধ হবে।%n%nThis installs Nukta Bangla {#AppVersion}. Press F12 or click the tray icon to switch between English and Bangla.
 FinishedHeadingLabel=নুকতা বাংলা তৈরি
-FinishedLabel=ইনস্টল শেষ। F12 চাপুন বা বারে ক্লিক করুন, বাংলা লেখা শুরু।%n%nNukta Bangla is installed. Press F12 to start typing Bangla.
+FinishedLabel=ইনস্টল শেষ। F12 চাপুন বা বারে ক্লিক করুন, বাংলা লেখা শুরু।%n%nকিবোর্ড নিয়ন্ত্রণ করতে টাস্কবারের ডান দিকে সিস্টেম ট্রেতে নুকতা বাংলার আইকন দেখুন: ক্লিক করলে বাংলা চালু বা বন্ধ হবে, রাইট-ক্লিক করলে মেনু খুলবে। আইকন না দেখলে ট্রের ^ চিহ্নে ক্লিক করুন।%n%nNukta Bangla is installed. Press F12 to start typing Bangla. Check the system tray (bottom right of the taskbar) for the Nukta Bangla icon: click it to switch Bangla on or off, right-click it to open the keyboard menu.
 
 [Run]
 ; Adds the keyboard to the languages of the user who ran Setup (not the administrator account it
 ; may have been elevated to).
 Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--enable"; Flags: runasoriginaluser waituntilterminated; StatusMsg: "Adding নুকতা বাংলা to your keyboards…"
+; Every install ends with the top bar on screen, not in the tray, even if it was left there before
+; (the settings outlive an uninstall, and an update keeps them).
+Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--show-bar"; Flags: runasoriginaluser waituntilterminated
+; A first install starts in English, with ফোনেটিক as the layout F12 turns on and ফোনেটিক আগে
+; as its typing mode.
+Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--first-install"; Flags: runasoriginaluser waituntilterminated; Check: IsFreshInstall
 ; With the splash screen, as when Windows starts: no restart is needed on a first install.
 Filename: "{app}\NuktaBangla.exe"; Parameters: "--startup"; Description: "নুকতা বাংলা চালু করুন (Launch Nukta Bangla)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 Filename: "{app}\NuktaBanglaSettings.exe"; Description: "সেটিংস খুলুন (Open settings)"; Flags: postinstall nowait skipifsilent runasoriginaluser unchecked
@@ -102,13 +108,22 @@ Filename: "{app}\NuktaBangla.exe"; Parameters: "--quit"; RunOnceId: "CloseBar"; 
 Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--disable"; RunOnceId: "RemoveFromKeyboards"; Flags: waituntilterminated
 
 [Code]
+var
+  FreshInstall: Boolean;
+
 // An update closes the running top bar first, so its program can be replaced; Setup starts the
-// new one at the end.
+// new one at the end. No program there yet means a first install (or one after an uninstall).
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
 begin
-  if FileExists(ExpandConstant('{app}\NuktaBangla.exe')) then
+  FreshInstall := not FileExists(ExpandConstant('{app}\NuktaBangla.exe'));
+  if not FreshInstall then
     Exec(ExpandConstant('{app}\NuktaBangla.exe'), '--quit', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Result := '';
+end;
+
+function IsFreshInstall: Boolean;
+begin
+  Result := FreshInstall;
 end;

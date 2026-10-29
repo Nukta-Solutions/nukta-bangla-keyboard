@@ -16,7 +16,8 @@ fn fresh_directory(name: &str) -> PathBuf {
 #[test]
 fn defaults_without_a_file() {
     let settings = Settings::new(&fresh_directory("defaults"));
-    assert_eq!(settings.layout(), Layout::Bijoy);
+    assert_eq!(settings.layout(), Layout::Phonetic);
+    assert!(settings.toggle_sound());
     assert_eq!(settings.typing_mode(), TypingMode::PhoneticFirst);
     assert!(settings.autocorrect() && settings.emoji() && settings.english_word());
     assert!(!settings.colon_is_bisarga());

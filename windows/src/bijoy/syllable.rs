@@ -83,8 +83,8 @@ impl Syllable {
         self.tokens.pop();
     }
 
-    /// Nothing goes on screen until there is a consonant to hang it on, and a trailing ্ waits
-    /// for the next key (it may turn into a full vowel: j g d → কই).
+    /// What is on screen while the syllable is being typed: everything, except that a trailing ্
+    /// waits for the next key (it may turn into a full vowel: j g d → কই).
     pub(crate) fn visible_rendered(&self) -> String {
         if !self.has_cluster() {
             // অ (Shift+F) shows straight away; an f after it still turns it into আ.
@@ -92,19 +92,31 @@ impl Syllable {
                 return self.rendered();
             }
             // So does a ি ে ৈ typed before its consonant (c j → কে): ে now, কে with the j.
-            // Windows only for now; Swift and Python still hold it back.
-            if self.tokens.iter().all(|t| matches!(t, Token::PreKar(_))) {
-                return self.rendered();
+            // It sits on a no-break space, so it neither clings to the letter before it (হে + ে
+            // showed as হেে) nor gets a dotted circle. The space is only shown, never typed.
+            // Whatever follows it before the consonant shows too (c f → ো, c Q → েং).
+            // Windows only; Swift and Python still hold it back.
+            if matches!(self.tokens.first(), Some(Token::PreKar(_))) {
+                return format!("\u{00A0}{}", self.rendered());
             }
             return String::new();
         }
-        let waiting = matches!(self.tokens.last(), Some(Token::WaitingKar(_)));
-        if !self.last_is_hasanta() && !waiting {
+        let waiting = match self.tokens.last() {
+            Some(Token::WaitingKar(k)) => Some(*k),
+            _ => None,
+        };
+        if !self.last_is_hasanta() && waiting.is_none() {
             return self.rendered();
         }
         let mut without_link = self.clone();
         without_link.pop();
-        without_link.rendered()
+        match waiting {
+            // A ি ে ৈ pressed once after a consonant (i c in হরেক, হয়ে) most often waits for the
+            // next one: shown apart, on a no-break space, like one typed first. Pressed again
+            // it joins this consonant (j c c → কে).
+            Some(kar) => format!("{}\u{00A0}{kar}", without_link.rendered()),
+            None => without_link.rendered(),
+        }
     }
 
     pub(crate) fn rendered(&self) -> String {

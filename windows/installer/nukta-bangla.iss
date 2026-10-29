@@ -100,6 +100,8 @@ Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--show-bar"; Flags: runa
 ; as its typing mode.
 Filename: "{app}\NuktaBanglaSettings.exe"; Parameters: "--first-install"; Flags: runasoriginaluser waituntilterminated; Check: IsFreshInstall
 ; With the splash screen, as when Windows starts: no restart is needed on a first install.
+; An update run from the update dialog (/SILENT) skips the finish page: start the new top bar here.
+Filename: "{app}\NuktaBangla.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
 Filename: "{app}\NuktaBangla.exe"; Parameters: "--startup"; Description: "নুকতা বাংলা চালু করুন (Launch Nukta Bangla)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 Filename: "{app}\NuktaBanglaSettings.exe"; Description: "সেটিংস খুলুন (Open settings)"; Flags: postinstall nowait skipifsilent runasoriginaluser unchecked
 

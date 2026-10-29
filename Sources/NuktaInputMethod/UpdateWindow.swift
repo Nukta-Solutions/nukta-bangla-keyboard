@@ -178,8 +178,12 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
 
     // MARK: The buttons
 
+    /// The release's .dmg straight to Downloads, through the browser; a release without one opens its
+    /// GitHub page instead.
     @objc private func download(_ sender: Any?) {
-        NSWorkspace.shared.open(Updates.website)
+        if let release {
+            NSWorkspace.shared.open(release.download ?? release.url)
+        }
         // Asked again in a day, in case it wasn't installed.
         close()
     }

@@ -50,6 +50,21 @@ class ReleaseTests(unittest.TestCase):
         self.assertIsNone(updates.parse_release(b'{"tag_name": "latest"}'))
         self.assertIsNone(updates.parse_release(b"not json"))
 
+    def test_finds_the_linux_installer_among_the_assets(self):
+        data = json.dumps({"tag_name": "v1.0.4", "assets": [
+            {"name": "NuktaBangla-Setup.exe", "browser_download_url": "https://example.com/Setup.exe"},
+            {"name": "nukta-bangla-linux.sh", "browser_download_url": "https://example.com/linux.sh"},
+        ]}).encode()
+        release = updates.parse_release(data)
+        self.assertEqual(release.download, "https://example.com/linux.sh")
+        self.assertIsNone(updates.parse_release(release_json("v1.0.4")).download)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "update.json")
+            state = State(path)
+            state.record(release, 1)
+            state.save()
+            self.assertEqual(State(path).latest.download, "https://example.com/linux.sh")
+
     def test_shows_at_most_five_notes(self):
         body = "".join(f"- note {n}\n" for n in range(1, 9))
         self.assertEqual(len(updates.notes_from(body)), MAX_NOTES)

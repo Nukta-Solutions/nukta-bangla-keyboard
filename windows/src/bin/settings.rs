@@ -13,6 +13,8 @@
 //! check finds a new version (`--update-background`: shown without taking the keyboard, so typing
 //! in the app underneath goes on); "এখনই খুঁজুন" opens it too. Its buttons wait a second before they
 //! answer, and Enter and Space press none of them, so a keystroke meant for the app can't.
+//! ডাউনলোড fetches the installer right there, with a progress bar, and runs it (`/SILENT`); a
+//! release without one opens its GitHub page instead.
 //!
 //! The installer also runs it to add the keyboard to the user's languages and to remove it:
 //!
@@ -69,6 +71,11 @@ mod app {
     const GUARD: Duration = Duration::from_millis(1000);
     /// "এখনই খুঁজুন" got its answer: WPARAM is a `Check`.
     const WM_CHECKED: u32 = WM_APP + 1;
+    /// The installer's download: WPARAM is how far, in thousandths (`UNKNOWN` without a size).
+    const WM_PROGRESS: u32 = WM_APP + 2;
+    /// The download finished: WPARAM is 1 if the installer is ready to run.
+    const WM_DOWNLOADED: u32 = WM_APP + 3;
+    const UNKNOWN: usize = usize::MAX;
     const WM_MOUSELEAVE: u32 = 0x02A3;
 
     // MARK: The design (settings-preview.html), in DIPs.
@@ -152,6 +159,17 @@ mod app {
         Update,
     }
 
+    /// Where the update dialog's ডাউনলোড is.
+    #[derive(Clone, Copy, PartialEq, Debug)]
+    enum Download {
+        Idle,
+        /// Thousandths done, if the size is known.
+        Downloading(Option<u16>),
+        Failed,
+        /// Downloaded, but the installer didn't start (Windows' permission prompt said no).
+        NotStarted,
+    }
+
     /// Where "এখনই খুঁজুন" is.
     #[derive(Clone, Copy, PartialEq, Debug)]
     enum Check {
@@ -196,6 +214,7 @@ mod app {
         check: Check,
         /// When the window opened: the update dialog's buttons wait for `GUARD`.
         opened: Instant,
+        download: Download,
     }
 
     thread_local! {
@@ -307,7 +326,7 @@ mod app {
             APP.with(|app| {
                 *app.borrow_mut() = Some(App {
                     window, screen, gfx, settings, dpi, hover: None, hits: Vec::new(), height: 0.0,
-                    release, check: Check::Idle, opened: Instant::now(),
+                    release, check: Check::Idle, opened: Instant::now(), download: Download::Idle,
                 })
             });
 
@@ -383,7 +402,7 @@ mod app {
             let height = match app.screen {
                 Screen::Settings => draw_settings(&mut ctx, &app.settings, app.check),
                 Screen::About => draw_about(&mut ctx),
-                Screen::Update => draw_update(&mut ctx, app.release.as_ref(), true),
+                Screen::Update => draw_update(&mut ctx, app.release.as_ref(), true, app.download),
             };
             app.height = height;
             height
@@ -393,10 +412,15 @@ mod app {
 
     /// After a change: the window follows the content's height (বিজয় ⇄ ফোনেটিক), and redraws.
     fn refresh() {
-        let Some((window, old_height, dpi)) = with_app(|app| (app.window, app.height, app.dpi)) else { return };
+        let Some((window, old_height, dpi, screen)) = with_app(|app| (app.window, app.height, app.dpi, app.screen)) else { return };
         let height = content_height();
         if (height - old_height).abs() > 0.5 {
-            resize(window, SETTINGS_WIDTH, height, dpi, false);
+            let width = match screen {
+                Screen::Settings => SETTINGS_WIDTH,
+                Screen::About => ABOUT_WIDTH,
+                Screen::Update => UPDATE_WIDTH,
+            };
+            resize(window, width, height, dpi, false);
         }
         unsafe {
             let _ = InvalidateRect(Some(window), None, false);
@@ -811,7 +835,7 @@ mod app {
     // MARK: Update dialog (update-preview.html)
 
     /// `ready`: the buttons answer (a second after the dialog opened).
-    fn draw_update(ctx: &mut Ctx, release: Option<&Release>, ready: bool) -> f32 {
+    fn draw_update(ctx: &mut Ctx, release: Option<&Release>, ready: bool, download: Download) -> f32 {
         let Some(release) = release else { return 200.0 };
         let w = UPDATE_WIDTH;
         let pad = 26.0;
@@ -863,18 +887,52 @@ mod app {
             y += card_height;
         }
 
-        // The buttons. None is the default: Enter and Space press nothing here.
+        // Why the last ডাউনলোড didn't finish.
+        let problem = match download {
+            Download::Failed => Some("ডাউনলোড করা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"),
+            Download::NotStarted => Some("ইনস্টলার চালু হয়নি। আবার চেষ্টা করলে Windows অনুমতি চাইবে: Yes চাপুন।"),
+            _ => None,
+        };
+        if let Some(problem) = problem {
+            y += 16.0;
+            let style = Style::new(12.5).wrap();
+            let height = ctx.height(problem, style, w - 2.0 * pad);
+            ctx.text(problem, Rect::new(pad, y, w - 2.0 * pad, height), style, ORANGE);
+            y += height;
+        }
+
         y += 20.0;
+        let right = w - pad;
+        if let Download::Downloading(done) = download {
+            // The progress bar, with বাতিল (which closes the dialog) beside it.
+            let cancel = "বাতিল";
+            let cancel_width = ctx.gfx.text_width(cancel, Style::new(13.0)) + 28.0;
+            ctx.button(Rect::new(right - cancel_width, y, cancel_width, 34.0), cancel, Action::Later, true);
+            let bar_width = w - 2.0 * pad - cancel_width - 16.0;
+            let label = match done {
+                Some(done) => format!("ডাউনলোড হচ্ছে… {}%", update::bangla_digits(&(done / 10).to_string())),
+                None => "ডাউনলোড হচ্ছে…".to_owned(),
+            };
+            ctx.text(&label, Rect::new(pad, y - 1.0, bar_width, 18.0), Style::new(12.5), DIM);
+            let track = Rect::new(pad, y + 23.0, bar_width, 6.0);
+            ctx.fill(track, 3.0, BOX);
+            let fraction = done.map_or(0.15, |done| f32::from(done.min(1000)) / 1000.0);
+            if fraction > 0.0 {
+                ctx.brand(Rect::new(pad, y + 23.0, (bar_width * fraction).max(6.0), 6.0), 3.0);
+            }
+            return y + 34.0 + 22.0;
+        }
+
+        // The buttons. None is the default: Enter and Space press nothing here.
         let skip = "এই সংস্করণ বাদ দিন";
         let skip_width = ctx.gfx.text_width(skip, Style::new(13.0)) + 8.0;
         let hovered = ready && ctx.hit(Rect::new(pad - 4.0, y, skip_width, 34.0), Action::Skip);
         ctx.text(skip, Rect::new(pad, y, skip_width, 34.0), Style::new(13.0), if hovered { INK } else { DIM });
-        let download = "ডাউনলোড";
-        let download_width = ctx.gfx.text_width(download, Style::new(13.0).weight(600)) + 36.0;
+        let label = if problem.is_some() { "আবার চেষ্টা" } else { "ডাউনলোড" };
+        let download_width = ctx.gfx.text_width(label, Style::new(13.0).weight(600)) + 36.0;
         let later = "পরে";
         let later_width = ctx.gfx.text_width(later, Style::new(13.0)) + 28.0;
-        let right = w - pad;
-        ctx.primary(Rect::new(right - download_width, y, download_width, 34.0), download, Action::Download, ready);
+        ctx.primary(Rect::new(right - download_width, y, download_width, 34.0), label, Action::Download, ready);
         ctx.button(Rect::new(right - download_width - 8.0 - later_width, y, later_width, 34.0), later, Action::Later, ready);
         y + 34.0 + 22.0
     }
@@ -1036,22 +1094,87 @@ mod app {
         }
     }
 
-    /// A button in the update dialog. All but "সব পরিবর্তন দেখুন" close it.
+    /// A button in the update dialog. পরে and বাদ দিন close it; ডাউনলোড closes it once the installer
+    /// is running.
     fn update_choice(action: Action) {
-        let Some((window, release)) = with_app(|app| (app.window, app.release.clone())) else { return };
+        let Some((window, release, download)) = with_app(|app| (app.window, app.release.clone(), app.download)) else { return };
         let Some(release) = release else { return };
         let mut state = update::State::load(&win::data_directory());
         match action {
             Action::ReleasePage => return open_url(&release.url),
-            Action::Download => open_url(update::WEBSITE),
+            Action::Download if matches!(download, Download::Downloading(_)) => return,
+            // Already downloaded: only the installer needs starting again.
+            Action::Download if download == Download::NotStarted && update::installer_path(&release).exists() => {
+                return run_installer(&release);
+            }
+            Action::Download if release.download.is_some() => return start_download(window, release),
+            // No installer in this release: its page has what there is.
+            Action::Download => open_url(&release.url),
             Action::Skip => state.skip(&release.version),
             _ => {}
         }
-        // "পরে" and ডাউনলোড: ask again in a day, in case it wasn't installed.
+        // Asked again in a day, in case it wasn't installed.
         state.mark_shown(update::now());
         state.save();
         unsafe {
             let _ = DestroyWindow(window);
+        }
+    }
+
+    /// Fetches the installer off the UI thread; the bar follows `WM_PROGRESS`, and `WM_DOWNLOADED`
+    /// says when it is done.
+    fn start_download(window: HWND, release: Release) {
+        with_app(|app| app.download = Download::Downloading(None));
+        refresh();
+        let target = window.0 as isize;
+        std::thread::spawn(move || {
+            let post = |message: u32, value: usize| unsafe {
+                let _ = PostMessageW(Some(HWND(target as *mut _)), message, WPARAM(value), LPARAM(0));
+            };
+            let mut last = None;
+            let path = update::download_installer(&release, |received, total| {
+                let done = total.filter(|&t| t > 0).map(|t| (received.min(t) * 1000 / t) as usize);
+                // Only when the bar moves a whole step.
+                if done != last {
+                    last = done;
+                    post(WM_PROGRESS, done.unwrap_or(UNKNOWN));
+                }
+            });
+            post(WM_DOWNLOADED, path.is_some() as usize);
+        });
+    }
+
+    /// The download is done: run the installer, or say why not.
+    fn downloaded(ok: bool) {
+        let release = with_app(|app| app.release.clone()).flatten();
+        match release {
+            Some(release) if ok => run_installer(&release),
+            _ => {
+                with_app(|app| app.download = Download::Failed);
+                refresh();
+            }
+        }
+    }
+
+    /// Runs the downloaded installer without its wizard pages (it asks for Windows' permission
+    /// first) and closes the dialog. The installer closes the top bar, replaces the programs and
+    /// starts the new top bar.
+    fn run_installer(release: &Release) {
+        let path = wide(&update::installer_path(release).to_string_lossy());
+        let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(path.as_ptr()), w!("/SILENT"), PCWSTR::null(), SW_SHOWNORMAL) };
+        // ShellExecute's success is any value above 32.
+        if result.0 as isize > 32 {
+            let mut state = update::State::load(&win::data_directory());
+            state.mark_shown(update::now());
+            state.save();
+            if let Some(window) = with_app(|app| app.window) {
+                unsafe {
+                    let _ = DestroyWindow(window);
+                }
+            }
+        } else {
+            with_app(|app| app.download = Download::NotStarted);
+            refresh();
         }
     }
 
@@ -1104,7 +1227,7 @@ mod app {
                                 draw_about(&mut ctx);
                             }
                             Screen::Update => {
-                                draw_update(&mut ctx, app.release.as_ref(), app.opened.elapsed() >= GUARD);
+                                draw_update(&mut ctx, app.release.as_ref(), app.opened.elapsed() >= GUARD, app.download);
                             }
                         }
                         hits = ctx.hits;
@@ -1166,6 +1289,27 @@ mod app {
             }
             WM_CHECKED => {
                 checked(Check::from_code(wparam.0));
+                LRESULT(0)
+            }
+            WM_PROGRESS => {
+                let done = (wparam.0 != UNKNOWN).then(|| wparam.0.min(1000) as u16);
+                let changed = with_app(|app| {
+                    let changed = matches!(app.download, Download::Downloading(_));
+                    if changed {
+                        app.download = Download::Downloading(done);
+                    }
+                    changed
+                })
+                .unwrap_or(false);
+                if changed {
+                    unsafe {
+                        let _ = InvalidateRect(Some(window), None, false);
+                    }
+                }
+                LRESULT(0)
+            }
+            WM_DOWNLOADED => {
+                downloaded(wparam.0 == 1);
                 LRESULT(0)
             }
             WM_TIMER if wparam.0 == GUARD_TIMER => {

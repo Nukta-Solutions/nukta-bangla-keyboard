@@ -167,7 +167,8 @@ Your own autocorrect entries go in `autocorrect.json` there, a flat JSON object 
 
 Once a day, when a নুকতা বাংলা layout gets the focus, the engine asks GitHub for the latest release.
 If it is newer than the installed version, a small window says so, with the release's bullet points
-under "নতুন যা আছে": **ডাউনলোড** opens the keyboard's website, **পরে** asks again the next day, and
+under "নতুন যা আছে": **ডাউনলোড** downloads the release's `nukta-bangla-linux.sh` through the browser
+(run it with `bash` to update), **পরে** asks again the next day, and
 **এই সংস্করণ বাদ দিন** stays quiet until the next release. The window never takes the keyboard
 focus, and its buttons only answer clicks. Without GTK 3's Python bindings (`gir1.2-gtk-3.0`) it is
 a desktop notification instead.

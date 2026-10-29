@@ -150,8 +150,8 @@ On Windows, `windows\build.ps1` makes `build\windows\NuktaBangla-Setup.exe` (see
 [windows/README.md](windows/README.md)); the Windows workflow builds the same file on every push.
 
 ## Releasing
-The website and README link to the newest release with fixed names, so **every release must carry all
-three files, named exactly**:
+Platforms are released when they are ready, not all at once: one version line for all of them, and
+each release carries only the platforms in it. Their files always have these names:
 
 | Platform | Asset | Permanent link |
 |---|---|---|
@@ -159,8 +159,21 @@ three files, named exactly**:
 | Windows | `NuktaBangla-Setup.exe` | https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/latest/download/NuktaBangla-Setup.exe |
 | Linux | `nukta-bangla-linux.sh` | https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/latest/download/nukta-bangla-linux.sh |
 
-A release missing one of them breaks that platform's link until the next release, so never publish
-one without all three.
+A `releases/latest/download/…` link only works for a platform that is in the latest release: link the
+website's button for a platform left out of recent releases to its last release's own file (macOS now:
+https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/download/v1.0.2/NuktaBangla.dmg).
+
+Each release:
+- **Version:** bump all three files together, even for a platform that isn't in the release (the
+  workflow checks them against the tag, and the Mac mini can then build any tag). A number is used
+  once: the next release of any platform takes the next free one.
+- **Notes:** before pushing the tag, create the draft release yourself with the notes, in Bangla,
+  as `- ` lines (the update dialog shows up to five; see "The update notice"). Otherwise the workflow
+  writes English notes from the pull requests, and those reach the dialog.
+- **Windows and Linux only:** push the tag; the workflow attaches both files and leaves the draft
+  (the .dmg is missing), so publish it yourself on GitHub.
+- **With macOS:** push the tag, wait for the workflow, then on the Mac mini run
+  `scripts/release-mac.sh <tag>` (below): it adds the .dmg and publishes.
 
 Pushing a `v*` tag runs [.github/workflows/release.yml](.github/workflows/release.yml):
 1. Checks the tag is `v` + `CFBundleShortVersionString`, and that `linux/nukta_bangla/__init__.py` and
@@ -220,12 +233,14 @@ App Store Connect → Users and Access → Integrations → App Store Connect AP
 Developer; it can be downloaded once. `gh secret set APP_STORE_CONNECT_API_KEY_P8 < AuthKey_XXXXXXXXXX.p8`.
 
 ### The update notice
-Every installed copy asks GitHub for the latest release once a day (macOS: when you switch to the
-keyboard; Windows: the top bar; Linux: when a layout gets the focus) and, if its tag is a newer version
-than the installed one, shows the update dialog. So:
-- The tag must match the versions in Info.plist, `windows/Cargo.toml` and
-  `linux/nukta_bangla/__init__.py` (the release workflow checks this): a copy whose version is behind
-  the tag keeps being told to update.
+Every installed copy asks GitHub once a day (macOS: when you switch to the keyboard; Windows: the top
+bar; Linux: when a layout gets the focus) for the newest published release **that has its own
+platform's file**, and shows the update dialog if that is newer than the installed version. A
+Windows-only release reaches Windows users only; a later release with the .dmg reaches Mac users,
+whatever versions they skipped. So:
+- Older builds don't know this yet: Windows 1.0.3–1.0.4, Linux up to 1.0.4 and macOS 1.0.2 only look
+  at the latest release, whatever it carries. Their users are prompted for every release until they
+  install a build with the per-platform check (Windows and Linux 1.0.5, the next macOS release).
 - In the release description, the lines starting with `- ` (at most five) are the dialog's
   "নতুন যা আছে", shown as you write them, so write them in Bangla. Everything else (paragraphs,
   headings, install steps) is only on the GitHub page. No bullet lines: the dialog has no notes box.

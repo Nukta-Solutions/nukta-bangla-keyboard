@@ -65,6 +65,20 @@ class ReleaseTests(unittest.TestCase):
             state.save()
             self.assertEqual(State(path).latest.download, "https://example.com/linux.sh")
 
+    def test_offers_only_releases_with_the_linux_installer(self):
+        sh = {"name": "nukta-bangla-linux.sh", "browser_download_url": "https://example.com/linux.sh"}
+        exe = {"name": "NuktaBangla-Setup.exe", "browser_download_url": "https://example.com/Setup.exe"}
+        listed = json.dumps([
+            {"tag_name": "v1.0.8", "draft": True, "assets": [sh]},
+            {"tag_name": "v1.0.7", "prerelease": True, "assets": [sh]},
+            {"tag_name": "v1.0.6", "assets": [exe]},
+            {"tag_name": "v1.0.5", "assets": [sh, exe]},
+            {"tag_name": "v1.0.4", "assets": [sh]},
+        ]).encode()
+        self.assertEqual(updates.newest_for_linux(listed).version, "1.0.5")
+        self.assertIsNone(updates.newest_for_linux(json.dumps([{"tag_name": "v2.0.0", "assets": [exe]}])))
+        self.assertIsNone(updates.newest_for_linux(b'{"message": "rate limited"}'))
+
     def test_shows_at_most_five_notes(self):
         body = "".join(f"- note {n}\n" for n in range(1, 9))
         self.assertEqual(len(updates.notes_from(body)), MAX_NOTES)

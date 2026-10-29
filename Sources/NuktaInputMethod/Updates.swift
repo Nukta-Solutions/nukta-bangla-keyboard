@@ -3,9 +3,10 @@ import Foundation
 /// Update checks: the counterpart of `windows/src/update.rs` and `linux/nukta_bangla/updates.py`,
 /// with the same rules.
 ///
-/// - The latest release comes from GitHub (`/releases/latest`): its tag is the version, and the
-///   description's bullet lines (`- …` or `* …`, at most five) are what the dialog shows under
-///   "নতুন যা আছে".
+/// - The newest release *for macOS* comes from GitHub: of the recent published releases, the
+///   highest version that has `NuktaBangla.dmg` attached. A release without it (one for Windows or
+///   Linux only) is never offered here. Its tag is the version, and the description's bullet
+///   lines (`- …` or `* …`, at most five) are what the dialog shows under "নতুন যা আছে".
 /// - Switching to the keyboard asks GitHub at most once a day, while `Settings.autoUpdateCheck` is
 ///   on. The dialog then waits a day before asking again ("পরে"), and a skipped version is never
 ///   offered again ("বাদ দিন").
@@ -13,7 +14,8 @@ import Foundation
 final class Updates {
     static let shared = Updates()
 
-    static let apiURL = URL(string: "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases/latest")!
+    /// The recent releases, newest first.
+    static let apiURL = URL(string: "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases?per_page=20")!
     /// The keyboard's page, which has every platform's installer.
     static let website = URL(string: "https://www.nuktasolutions.com/nukta-bangla-keyboard")!
     /// The macOS installer's name in every release (CLAUDE.md: never renamed).
@@ -88,7 +90,7 @@ final class Updates {
         request.setValue("NuktaBangla/\(Self.current) (macOS)", forHTTPHeaderField: "User-Agent")
         URLSession.shared.dataTask(with: request) { data, response, _ in
             let ok = (response as? HTTPURLResponse)?.statusCode == 200
-            let release = ok ? data.flatMap(Self.parseRelease) : nil
+            let release = ok ? data.flatMap(Self.newestForMac) : nil
             DispatchQueue.main.async {
                 self.checking = false
                 done(release)
@@ -138,7 +140,18 @@ final class Updates {
 
     // MARK: Reading GitHub's answer
 
-    /// GitHub's answer for the latest release, or nil if it isn't one.
+    /// GitHub's list of releases: the newest published one with the .dmg, or nil. Drafts and
+    /// pre-releases are passed over.
+    static func newestForMac(_ data: Data) -> Release? {
+        guard let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+        let releases = list
+            .filter { ($0["draft"] as? Bool) != true && ($0["prerelease"] as? Bool) != true }
+            .compactMap { (try? JSONSerialization.data(withJSONObject: $0)).flatMap(parseRelease) }
+            .filter { $0.download != nil }
+        return releases.max { isNewer($1.version, than: $0.version) }
+    }
+
+    /// GitHub's answer for one release, or nil if it isn't one.
     static func parseRelease(_ data: Data) -> Release? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String else { return nil }

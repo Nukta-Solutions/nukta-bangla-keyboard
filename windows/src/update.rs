@@ -1,9 +1,10 @@
 //! Update checks: the counterpart of `Sources/NuktaInputMethod/Updates.swift` and
 //! `linux/nukta_bangla/updates.py`, with the same rules.
 //!
-//! - The latest release comes from GitHub (`/releases/latest`): its tag is the version, and the
-//!   description's bullet lines (`- …` or `* …`, at most five) are what the dialog shows under
-//!   "নতুন যা আছে".
+//! - The newest release *for Windows* comes from GitHub: of the recent published releases, the
+//!   highest version that has `NuktaBangla-Setup.exe` attached. A release without it (one for
+//!   macOS or Linux only) is never offered here. Its tag is the version, and the description's
+//!   bullet lines (`- …` or `* …`, at most five) are what the dialog shows under "নতুন যা আছে".
 //! - The top bar asks at most once a day, while `autoUpdateCheck` is on. The dialog then waits a
 //!   day before asking again ("পরে"), and a skipped version is never offered again ("বাদ দিন").
 //! - The settings window's "এখনই খুঁজুন" asks straight away and always answers.
@@ -24,7 +25,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 
 pub const STATE_FILE: &str = "update.json";
-pub const API_URL: &str = "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases/latest";
+/// The recent releases, newest first; drafts are only listed for the repository's members.
+pub const API_URL: &str = "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases?per_page=20";
 /// The keyboard's page, which has every platform's installer.
 pub const WEBSITE: &str = "https://www.nuktasolutions.com/nukta-bangla-keyboard";
 /// The Windows installer's name in every release (CLAUDE.md: never renamed).
@@ -66,6 +68,26 @@ pub fn parse_release(json: &[u8]) -> Option<Release> {
         .and_then(|asset| asset.get("browser_download_url")?.as_str())
         .map(str::to_owned);
     Some(Release { version, notes, url, download })
+}
+
+/// GitHub's list of releases: the newest published one with the Windows installer, or None.
+/// Drafts and pre-releases are passed over.
+pub fn newest_for_windows(json: &[u8]) -> Option<Release> {
+    let list: Vec<Value> = serde_json::from_slice(json).ok()?;
+    list.iter()
+        .filter(|r| !r.get("draft").and_then(Value::as_bool).unwrap_or(false))
+        .filter(|r| !r.get("prerelease").and_then(Value::as_bool).unwrap_or(false))
+        .filter_map(|r| parse_release(&serde_json::to_vec(r).ok()?))
+        .filter(|r| r.download.is_some())
+        .max_by(|a, b| {
+            if is_newer(&a.version, &b.version) {
+                std::cmp::Ordering::Greater
+            } else if is_newer(&b.version, &a.version) {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        })
 }
 
 /// The bullet lines of a release description, without their bullets or Markdown.
@@ -234,11 +256,12 @@ impl State {
     }
 }
 
-/// Asks GitHub for the latest release. Blocks for up to about 20 seconds: call it off the UI thread.
+/// Asks GitHub for the newest release for Windows. Blocks for up to about 20 seconds: call it off
+/// the UI thread.
 #[cfg(windows)]
 pub fn fetch_latest() -> Option<Release> {
-    let body = get(API_URL, "application/vnd.github+json", 1 << 20, |_, _| {})?;
-    parse_release(&body)
+    let body = get(API_URL, "application/vnd.github+json", 4 << 20, |_, _| {})?;
+    newest_for_windows(&body)
 }
 
 /// Downloads the release's installer into the temporary folder and returns where it is.

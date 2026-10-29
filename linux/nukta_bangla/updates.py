@@ -1,9 +1,10 @@
 """Update checks — the counterpart of ``windows/src/update.rs`` and
 ``Sources/NuktaInputMethod/Updates.swift``, with the same rules.
 
-- The latest release comes from GitHub (``/releases/latest``): its tag is the version, and the
-  description's bullet lines (``- …`` or ``* …``, at most five) are what the dialog shows under
-  "নতুন যা আছে".
+- The newest release *for Linux* comes from GitHub: of the recent published releases, the highest
+  version that has ``nukta-bangla-linux.sh`` attached. A release without it (one for Windows or
+  macOS only) is never offered here. Its tag is the version, and the description's bullet lines
+  (``- …`` or ``* …``, at most five) are what the dialog shows under "নতুন যা আছে".
 - Switching to a নুকতা বাংলা layout asks GitHub at most once a day, while ``autoUpdateCheck`` is on.
   The dialog then waits a day before asking again ("পরে"), and a skipped version is never offered
   again ("বাদ দিন").
@@ -29,7 +30,8 @@ from collections import namedtuple
 
 from .settings import Settings, config_directory
 
-API_URL = "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases/latest"
+#: The recent releases, newest first.
+API_URL = "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases?per_page=20"
 #: The keyboard's page, which has every platform's installer.
 WEBSITE = "https://www.nuktasolutions.com/nukta-bangla-keyboard"
 #: The Linux installer's name in every release (CLAUDE.md: never renamed).
@@ -116,6 +118,27 @@ def parse_release(data):
             download = link if isinstance(link, str) else None
             break
     return Release(version, notes_from(body), url, download)
+
+
+def newest_for_linux(data):
+    """GitHub's list of releases: the newest published one with the Linux installer, or None.
+    Drafts and pre-releases are passed over."""
+    try:
+        listed = json.loads(data)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(listed, list):
+        return None
+    best = None
+    for item in listed:
+        if not isinstance(item, dict) or item.get("draft") or item.get("prerelease"):
+            continue
+        release = parse_release(json.dumps(item))
+        if release is None or not release.download:
+            continue
+        if best is None or is_newer(release.version, best.version):
+            best = release
+    return best
 
 
 def bangla_digits(text):
@@ -214,7 +237,7 @@ def fetch_latest(timeout=15):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             if response.status != 200:
                 return None
-            return parse_release(response.read(1 << 20))
+            return newest_for_linux(response.read(4 << 20))
     except (OSError, ValueError):
         return None
 

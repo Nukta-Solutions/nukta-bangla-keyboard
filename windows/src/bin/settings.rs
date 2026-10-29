@@ -22,6 +22,8 @@
 //! NuktaBanglaSettings.exe --update   the update dialog, for what update.json last found
 //! NuktaBanglaSettings.exe --update-background   the same, without taking the keyboard
 //! NuktaBanglaSettings.exe --enable   add নুকতা বাংলা to this user's keyboards
+//! NuktaBanglaSettings.exe --show-bar show the top bar from now on (after every install)
+//! NuktaBanglaSettings.exe --first-install   English, ফোনেটিক for F12, ফোনেটিক আগে typing
 //! NuktaBanglaSettings.exe --disable  remove it
 //! ```
 
@@ -128,6 +130,7 @@ mod app {
         Layout(Layout),
         Mode(TypingMode),
         Colon(bool),
+        ToggleSound,
         Autocorrect,
         Emoji,
         EnglishWord,
@@ -212,6 +215,22 @@ mod app {
             }
             "--disable" => {
                 if win::enable_for_user(false).is_ok() { 0 } else { 1 }
+            }
+            "--show-bar" => {
+                // An install ends with the top bar on screen, even if it was left in the tray
+                // before: uninstalling keeps the settings file, and an update keeps it too.
+                Settings::new(&win::prepare_data_directory()).set_bar_visible(true);
+                0
+            }
+            "--first-install" => {
+                // Nothing installed before: start in English, with phonetic as the layout F12 turns
+                // on and the recommended typing mode (ফোনেটিক আগে), whatever settings an earlier
+                // install left behind.
+                let mut settings = Settings::new(&win::prepare_data_directory());
+                settings.set_english(true);
+                settings.set_layout(Layout::Phonetic);
+                settings.set_typing_mode(TypingMode::default());
+                0
             }
             "--about" => run_window(Screen::About, true),
             "--update" => run_window(Screen::Update, true),
@@ -569,6 +588,7 @@ mod app {
 
     fn layout_card(ctx: &mut Ctx, s: &Settings, x: f32, y: f32, width: f32) -> f32 {
         let layout = s.layout();
+        let sound = s.toggle_sound();
         with_card(ctx, x, y, width, |ctx| {
             let inner = x + CARD_PAD;
             let inner_width = width - 2.0 * CARD_PAD;
@@ -585,7 +605,13 @@ mod app {
             let style = Style::new(12.5).wrap();
             let height = ctx.height(hint, style, inner_width);
             ctx.text(hint, Rect::new(inner, y, inner_width, height), style, DIM);
-            y + height
+            y += height + 10.0;
+            ctx.fill(Rect::new(inner, y, inner_width, 1.0), 0.0, BORDER);
+            y += 10.0;
+            ctx.text("টগল সাউন্ড", Rect::new(inner, y, inner_width - 56.0, 22.0), Style::new(14.0), INK);
+            ctx.text("বাংলা চালু বা বন্ধ করার সময় ছোট একটা শব্দ", Rect::new(inner, y + 22.0, inner_width - 56.0, 20.0), Style::new(12.5), DIM);
+            ctx.toggle(inner + inner_width - 40.0, y + 10.0, sound, Action::ToggleSound);
+            y + 42.0
         })
     }
 
@@ -929,6 +955,10 @@ mod app {
                 Action::Layout(layout) => s.set_layout(layout),
                 Action::Mode(mode) => s.set_typing_mode(mode),
                 Action::Colon(bisarga) => s.set_colon_is_bisarga(bisarga),
+                Action::ToggleSound => {
+                    let on = s.toggle_sound();
+                    s.set_toggle_sound(!on)
+                }
                 Action::Autocorrect => {
                     let on = s.autocorrect();
                     s.set_autocorrect(!on)

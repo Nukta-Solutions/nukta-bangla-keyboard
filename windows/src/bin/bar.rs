@@ -377,7 +377,7 @@ mod app {
             app.settings.set_english(mode.is_none());
         });
         let _ = win::activate_keyboard();
-        if was_on != mode.is_some() {
+        if was_on != mode.is_some() && with_app(|app| app.settings.toggle_sound()).unwrap_or(true) {
             sound::play_toggle(mode.is_some());
         }
         mode_changed();
@@ -417,7 +417,7 @@ mod app {
     fn exit() {
         let was_on = mode().is_some();
         with_app(|app| app.settings.set_english(true));
-        if was_on {
+        if was_on && with_app(|app| app.settings.toggle_sound()).unwrap_or(true) {
             sound::play_toggle(false);
         }
         if let Some(window) = with_app(|app| app.window) {

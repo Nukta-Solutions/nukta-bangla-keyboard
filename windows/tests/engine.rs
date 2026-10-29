@@ -159,13 +159,24 @@ fn display_while_composing() {
 #[test]
 fn visible_holds_back_what_has_no_consonant_yet() {
     let mut e = Engine::new();
-    assert_eq!(e.process_character('d').unwrap().visible, "\u{09BF}");
+    // On a no-break space: no dotted circle, and not stuck to the letter before.
+    assert_eq!(e.process_character('d').unwrap().visible, "\u{00A0}\u{09BF}");
     assert_eq!(e.process_character('j').unwrap().visible, "কি");
     assert_eq!(e.process_character('g').unwrap().visible, "কি");
     let mut e = Engine::new();
-    assert_eq!(e.process_character('c').unwrap().visible, "\u{09C7}");
+    assert_eq!(e.process_character('c').unwrap().visible, "\u{00A0}\u{09C7}");
     assert_eq!(e.process_character('j').unwrap().visible, "কে");
     assert_eq!(e.process_character('f').unwrap().visible, "কো");
+    // হেরেম: the second ে waits apart from হে, and only the kar is ever typed, not the space.
+    let mut e = Engine::new();
+    e.process_character('c');
+    e.process_character('i');
+    let out = e.process_character('c').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("হে", "\u{00A0}\u{09C7}"));
+    assert_eq!(e.process_character('v').unwrap().visible, "রে");
+    let mut e = Engine::new();
+    e.process_character('c');
+    assert_eq!(e.commit().committed, "\u{09C7}");
     // Backspace takes it off the screen again.
     let mut e = Engine::new();
     e.process_character('c');
@@ -176,8 +187,21 @@ fn visible_holds_back_what_has_no_consonant_yet() {
     let mut e = Engine::new();
     e.process_character('j');
     let waiting = e.process_character('c').unwrap();
-    assert_eq!((waiting.display.as_str(), waiting.visible.as_str()), ("ক", "ক"));
+    assert_eq!((waiting.display.as_str(), waiting.visible.as_str()), ("ক", "ক\u{00A0}\u{09C7}"));
     assert_eq!(e.process_character('c').unwrap().visible, "কে");
+    // হরেক: the ে after র shows at once, apart, and goes to ক.
+    let mut e = Engine::new();
+    e.process_character('i');
+    assert_eq!(e.process_character('v').unwrap().committed, "হ");
+    let out = e.process_character('c').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("", "র\u{00A0}\u{09C7}"));
+    let out = e.process_character('j').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("র", "কে"));
+    // Finished there, it is র + ে as before (no space typed).
+    let mut e = Engine::new();
+    e.process_character('v');
+    e.process_character('c');
+    assert_eq!(e.commit().committed, "রে");
 }
 
 /// অ (Shift+F) is on screen as soon as it is typed, not only after the next key; an f still
@@ -193,6 +217,33 @@ fn a_shows_at_once() {
     e.process_character('F');
     let out = e.process_character('j').unwrap();
     assert_eq!((out.committed.as_str(), out.visible.as_str()), ("অ", "ক"));
+}
+
+/// Every mix of up to five keys: whatever has been typed is on screen, never hidden. Only a lone ্
+/// (g, which may still become a full vowel) waits for the next key.
+#[test]
+fn nothing_typed_stays_hidden() {
+    // Consonants, kars before and after, ্, ফলা, রেফ, signs, অ and a literal.
+    const KEYS: &[char] = &['j', 'i', 'v', 'c', 'd', 'C', 'f', 's', 'x', 'X', 'g', 'z', 'Z', 'A', 'Q', '&', 'F', 'G'];
+    fn walk(engine: &Engine, typed: &mut String, depth: usize) {
+        if depth == 0 {
+            return;
+        }
+        for &key in KEYS {
+            let mut e = engine.clone();
+            typed.push(key);
+            let out = e.process_character(key).unwrap();
+            let lone_hasanta = out.display == "\u{09CD}";
+            assert!(
+                !out.visible.is_empty() || out.display.is_empty() || lone_hasanta,
+                "{typed:?}: {:?} is being typed but nothing shows",
+                out.display
+            );
+            walk(&e, typed, depth - 1);
+            typed.pop();
+        }
+    }
+    walk(&Engine::new(), &mut String::new(), 5);
 }
 
 #[test]

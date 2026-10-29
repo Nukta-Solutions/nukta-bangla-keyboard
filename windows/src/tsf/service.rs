@@ -544,7 +544,10 @@ impl TextService_Impl {
             (state.english, state.layout)
         };
         self.switch_mode(if english { Some(layout) } else { None });
-        crate::sound::play_toggle(english);
+        let sound = self.state.borrow().settings.as_ref().is_none_or(Settings::toggle_sound);
+        if sound {
+            crate::sound::play_toggle(english);
+        }
         start_bar();
     }
 

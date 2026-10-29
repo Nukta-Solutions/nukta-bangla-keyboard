@@ -21,11 +21,12 @@ use crate::phonetic::{PhoneticOptions, TypingMode};
 
 pub const FILE_NAME: &str = "settings.json";
 
-/// The keyboard layout, shared by every app and kept across restarts.
+/// The keyboard layout, shared by every app and kept across restarts. Phonetic until another is
+/// picked: what F12 turns on after a first install.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Layout {
-    #[default]
     Bijoy,
+    #[default]
     Phonetic,
 }
 
@@ -98,8 +99,8 @@ impl Settings {
 
     pub fn layout(&self) -> Layout {
         match self.string("layout") {
-            Some("phonetic") => Layout::Phonetic,
-            _ => Layout::Bijoy,
+            Some("bijoy") => Layout::Bijoy,
+            _ => Layout::Phonetic,
         }
     }
 
@@ -153,6 +154,11 @@ impl Settings {
             Some("horizontal") => PopupDirection::Horizontal,
             _ => PopupDirection::Vertical,
         }
+    }
+
+    /// The beep when Bangla is switched on or off (`sound.rs`). On unless turned off.
+    pub fn toggle_sound(&self) -> bool {
+        self.flag("toggleSound", true)
     }
 
     /// Look for a new version once a day (`update.rs`). On unless turned off.
@@ -217,6 +223,10 @@ impl Settings {
 
     pub fn set_colon_is_bisarga(&mut self, on: bool) {
         self.set("colonIsBisarga", on.into());
+    }
+
+    pub fn set_toggle_sound(&mut self, on: bool) {
+        self.set("toggleSound", on.into());
     }
 
     pub fn set_auto_update_check(&mut self, on: bool) {

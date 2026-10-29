@@ -23,7 +23,7 @@ pub struct Output {
 
 /// ি ে ৈ work as in Avro 4.5.1's Bijoy layout: pressed once they wait for the next consonant
 /// (classic, `c j` → কে); pressed twice right after a consonant they attach to it (`j c c` → কে).
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Engine {
     syllable: Syllable,
     committed: String,

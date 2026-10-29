@@ -7,6 +7,8 @@
 //! - The top bar asks at most once a day, while `autoUpdateCheck` is on. The dialog then waits a
 //!   day before asking again ("পরে"), and a skipped version is never offered again ("বাদ দিন").
 //! - The settings window's "এখনই খুঁজুন" asks straight away and always answers.
+//! - ডাউনলোড fetches the release's `NuktaBangla-Setup.exe` inside the dialog and runs it
+//!   (`/SILENT`: no wizard pages; the installer starts the new top bar when it is done).
 //!
 //! What was found and what the user chose live beside the settings, in their own file, so the
 //! daily check doesn't make every app re-read settings.json:
@@ -22,10 +24,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 
 pub const STATE_FILE: &str = "update.json";
-pub const API_HOST: &str = "api.github.com";
-pub const API_PATH: &str = "/repos/Nukta-Solutions/nukta-bangla-keyboard/releases/latest";
-/// Where ডাউনলোড goes: the keyboard's page, which has every platform's installer.
+pub const API_URL: &str = "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases/latest";
+/// The keyboard's page, which has every platform's installer.
 pub const WEBSITE: &str = "https://www.nuktasolutions.com/nukta-bangla-keyboard";
+/// The Windows installer's name in every release (CLAUDE.md: never renamed).
+pub const INSTALLER_ASSET: &str = "NuktaBangla-Setup.exe";
 /// How long between automatic checks, and how long "পরে" waits.
 pub const DAY: u64 = 24 * 60 * 60;
 /// Bullet lines shown in the dialog; the rest are on the release page.
@@ -42,6 +45,8 @@ pub struct Release {
     pub notes: Vec<String>,
     /// The release's page on GitHub ("সব পরিবর্তন দেখুন").
     pub url: String,
+    /// The release's Windows installer, if it has one.
+    pub download: Option<String>,
 }
 
 /// GitHub's answer for the latest release, or None if it isn't one.
@@ -54,7 +59,13 @@ pub fn parse_release(json: &[u8]) -> Option<Release> {
     }
     let notes = notes_from(value.get("body").and_then(Value::as_str).unwrap_or(""));
     let url = value.get("html_url").and_then(Value::as_str).unwrap_or(WEBSITE).to_owned();
-    Some(Release { version, notes, url })
+    let download = value
+        .get("assets")
+        .and_then(Value::as_array)
+        .and_then(|assets| assets.iter().find(|a| a.get("name").and_then(Value::as_str) == Some(INSTALLER_ASSET)))
+        .and_then(|asset| asset.get("browser_download_url")?.as_str())
+        .map(str::to_owned);
+    Some(Release { version, notes, url, download })
 }
 
 /// The bullet lines of a release description, without their bullets or Markdown.
@@ -161,6 +172,7 @@ impl State {
                 .map(|notes| notes.iter().filter_map(Value::as_str).map(str::to_owned).collect())
                 .unwrap_or_default(),
             url: text("latestUrl").unwrap_or_else(|| WEBSITE.to_owned()),
+            download: text("latestDownload"),
         });
         State { path, last_check: number("lastCheck"), latest, skipped: text("skippedVersion"), remind_after: number("remindAfter") }
     }
@@ -174,6 +186,9 @@ impl State {
             value["latestVersion"] = release.version.clone().into();
             value["latestNotes"] = release.notes.clone().into();
             value["latestUrl"] = release.url.clone().into();
+            if let Some(download) = &release.download {
+                value["latestDownload"] = download.clone().into();
+            }
         }
         if let Some(skipped) = &self.skipped {
             value["skippedVersion"] = skipped.clone().into();
@@ -222,6 +237,34 @@ impl State {
 /// Asks GitHub for the latest release. Blocks for up to about 20 seconds: call it off the UI thread.
 #[cfg(windows)]
 pub fn fetch_latest() -> Option<Release> {
+    let body = get(API_URL, "application/vnd.github+json", 1 << 20, |_, _| {})?;
+    parse_release(&body)
+}
+
+/// Downloads the release's installer into the temporary folder and returns where it is.
+/// `progress(received, total)` follows it. Blocks: call it off the UI thread.
+#[cfg(windows)]
+pub fn download_installer(release: &Release, progress: impl FnMut(u64, Option<u64>)) -> Option<PathBuf> {
+    let url = release.download.as_deref()?;
+    let data = get(url, "application/octet-stream", 200 << 20, progress)?;
+    // A Windows program starts with "MZ": anything else (an error page) is not run.
+    if !data.starts_with(b"MZ") {
+        return None;
+    }
+    let path = installer_path(release);
+    fs::write(&path, data).ok()?;
+    Some(path)
+}
+
+/// Where `download_installer` puts a release's installer.
+pub fn installer_path(release: &Release) -> PathBuf {
+    std::env::temp_dir().join(format!("NuktaBangla-Setup-{}.exe", release.version))
+}
+
+/// An https GET, following redirects (GitHub sends downloads on to its file servers). None unless
+/// the answer is 200 and at most `limit` bytes.
+#[cfg(windows)]
+fn get(url: &str, accept: &str, limit: usize, mut progress: impl FnMut(u64, Option<u64>)) -> Option<Vec<u8>> {
     use windows::core::{w, PCWSTR};
     use windows::Win32::Networking::WinHttp::*;
 
@@ -236,6 +279,8 @@ pub fn fetch_latest() -> Option<Release> {
         }
     }
 
+    let rest = url.strip_prefix("https://")?;
+    let (host, path) = rest.split_once('/').map_or((rest, "/".to_owned()), |(h, p)| (h, format!("/{p}")));
     unsafe {
         let agent = crate::gfx::wide(&format!("NuktaBangla/{CURRENT} (Windows)"));
         // The system's proxy settings, as the browser uses.
@@ -243,36 +288,40 @@ pub fn fetch_latest() -> Option<Release> {
         if session.0.is_null() {
             return None;
         }
-        let _ = WinHttpSetTimeouts(session.0, 5000, 5000, 5000, 10000);
-        let host = crate::gfx::wide(API_HOST);
+        let _ = WinHttpSetTimeouts(session.0, 5000, 5000, 5000, 15000);
+        let host = crate::gfx::wide(host);
         let connection = Handle(WinHttpConnect(session.0, PCWSTR(host.as_ptr()), 443, 0));
         if connection.0.is_null() {
             return None;
         }
-        let path = crate::gfx::wide(API_PATH);
+        let path = crate::gfx::wide(&path);
         let request = Handle(WinHttpOpenRequest(
             connection.0, w!("GET"), PCWSTR(path.as_ptr()), PCWSTR::null(), PCWSTR::null(), std::ptr::null(), WINHTTP_FLAG_SECURE,
         ));
         if request.0.is_null() {
             return None;
         }
-        let headers: Vec<u16> = "Accept: application/vnd.github+json\r\n".encode_utf16().collect();
+        let headers: Vec<u16> = format!("Accept: {accept}\r\n").encode_utf16().collect();
         WinHttpSendRequest(request.0, Some(&headers), None, 0, 0, 0).ok()?;
         WinHttpReceiveResponse(request.0, std::ptr::null_mut()).ok()?;
 
-        let mut status = 0u32;
-        let mut size = std::mem::size_of::<u32>() as u32;
-        WinHttpQueryHeaders(
-            request.0, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, PCWSTR::null(),
-            Some(&mut status as *mut u32 as *mut _), &mut size, std::ptr::null_mut(),
-        )
-        .ok()?;
-        if status != 200 {
+        let number = |query: u32| {
+            let mut value = 0u32;
+            let mut size = std::mem::size_of::<u32>() as u32;
+            WinHttpQueryHeaders(
+                request.0, query | WINHTTP_QUERY_FLAG_NUMBER, PCWSTR::null(),
+                Some(&mut value as *mut u32 as *mut _), &mut size, std::ptr::null_mut(),
+            )
+            .ok()
+            .map(|_| value)
+        };
+        if number(WINHTTP_QUERY_STATUS_CODE)? != 200 {
             return None;
         }
+        let total = number(WINHTTP_QUERY_CONTENT_LENGTH).map(u64::from);
 
-        let mut body = Vec::new();
-        let mut buffer = [0u8; 8192];
+        let mut body = Vec::with_capacity(total.unwrap_or(0).min(limit as u64) as usize);
+        let mut buffer = vec![0u8; 64 * 1024];
         loop {
             let mut read = 0u32;
             WinHttpReadData(request.0, buffer.as_mut_ptr() as *mut _, buffer.len() as u32, &mut read).ok()?;
@@ -280,11 +329,11 @@ pub fn fetch_latest() -> Option<Release> {
                 break;
             }
             body.extend_from_slice(&buffer[..read as usize]);
-            // A release description is a few kilobytes; anything huge isn't what we asked for.
-            if body.len() > 1 << 20 {
+            if body.len() > limit {
                 return None;
             }
+            progress(body.len() as u64, total);
         }
-        parse_release(&body)
+        Some(body)
     }
 }

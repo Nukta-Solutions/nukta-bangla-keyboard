@@ -14,8 +14,10 @@ final class Updates {
     static let shared = Updates()
 
     static let apiURL = URL(string: "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases/latest")!
-    /// Where ডাউনলোড goes: the keyboard's page, which has every platform's installer.
+    /// The keyboard's page, which has every platform's installer.
     static let website = URL(string: "https://www.nuktasolutions.com/nukta-bangla-keyboard")!
+    /// The macOS installer's name in every release (CLAUDE.md: never renamed).
+    static let installerAsset = "NuktaBangla.dmg"
     /// How long between automatic checks, and how long "পরে" waits.
     static let day: TimeInterval = 24 * 60 * 60
     /// Bullet lines shown in the dialog; the rest are on the release page.
@@ -28,6 +30,8 @@ final class Updates {
         var notes: [String]
         /// The release's page on GitHub ("সব পরিবর্তন দেখুন").
         var url: URL
+        /// The release's .dmg, if it has one: what ডাউনলোড fetches.
+        var download: URL?
     }
 
     enum CheckResult {
@@ -102,7 +106,8 @@ final class Updates {
     var latest: Release? {
         guard let version = defaults.string(forKey: "updateLatestVersion") else { return nil }
         let url = defaults.string(forKey: "updateLatestURL").flatMap(URL.init(string:)) ?? Self.website
-        return Release(version: version, notes: defaults.stringArray(forKey: "updateLatestNotes") ?? [], url: url)
+        return Release(version: version, notes: defaults.stringArray(forKey: "updateLatestNotes") ?? [], url: url,
+                       download: defaults.string(forKey: "updateLatestDownload").flatMap(URL.init(string:)))
     }
 
     private func record(_ release: Release) {
@@ -110,6 +115,7 @@ final class Updates {
         defaults.set(release.version, forKey: "updateLatestVersion")
         defaults.set(release.notes, forKey: "updateLatestNotes")
         defaults.set(release.url.absoluteString, forKey: "updateLatestURL")
+        defaults.set(release.download?.absoluteString, forKey: "updateLatestDownload")
     }
 
     /// The release worth telling the user about, if any: newer than this build, not skipped, and
@@ -140,7 +146,12 @@ final class Updates {
         if version.first == "v" || version.first == "V" { version.removeFirst() }
         guard !versionParts(version).isEmpty else { return nil }
         let url = (object["html_url"] as? String).flatMap(URL.init(string:)) ?? website
-        return Release(version: version, notes: notes(from: object["body"] as? String ?? ""), url: url)
+        let assets = object["assets"] as? [[String: Any]] ?? []
+        let download = assets.first { $0["name"] as? String == installerAsset }
+            .flatMap { $0["browser_download_url"] as? String }
+            .flatMap(URL.init(string:))
+        return Release(version: version, notes: notes(from: object["body"] as? String ?? ""), url: url,
+                       download: download)
     }
 
     /// The bullet lines of a release description, without their bullets or Markdown.

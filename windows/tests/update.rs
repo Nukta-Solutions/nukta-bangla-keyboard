@@ -39,6 +39,25 @@ fn reads_a_github_release() {
     assert!(release.url.ends_with("/v1.0.3"));
     assert!(parse_release(br#"{"message": "Not Found"}"#).is_none());
     assert!(parse_release(br#"{"tag_name": "latest"}"#).is_none());
+    assert_eq!(release.download, None, "no installer attached");
+}
+
+#[test]
+fn finds_the_windows_installer_among_the_assets() {
+    let json = br#"{"tag_name": "v1.0.4", "assets": [
+        {"name": "nukta-bangla-linux.sh", "browser_download_url": "https://example.com/linux.sh"},
+        {"name": "NuktaBangla-Setup.exe", "browser_download_url": "https://example.com/Setup.exe"}
+    ]}"#;
+    let release = parse_release(json).unwrap();
+    assert_eq!(release.download.as_deref(), Some("https://example.com/Setup.exe"));
+
+    // It is kept in update.json with the rest.
+    let directory = fresh_directory("download");
+    let mut state = State::load(&directory);
+    state.record(release, 1);
+    state.save();
+    let again = State::load(&directory).latest.unwrap();
+    assert_eq!(again.download.as_deref(), Some("https://example.com/Setup.exe"));
 }
 
 #[test]
@@ -128,4 +147,23 @@ fn fetches_the_latest_release_from_github() {
     assert!(!version_parts(&release.version).is_empty());
     assert!(release.url.starts_with("https://github.com/"));
     println!("{release:?}");
+}
+
+/// Downloads the real latest installer: `cargo test --test update -- --ignored`.
+#[cfg(windows)]
+#[test]
+#[ignore = "needs the network"]
+fn downloads_the_latest_installer_from_github() {
+    let release = nukta_bangla::update::fetch_latest().expect("GitHub answered");
+    let mut steps = 0;
+    let path = nukta_bangla::update::download_installer(&release, |_, total| {
+        assert!(total.is_some(), "GitHub says how big it is");
+        steps += 1;
+    })
+    .expect("downloaded");
+    let data = fs::read(&path).unwrap();
+    assert!(data.starts_with(b"MZ") && data.len() > 1 << 20);
+    assert!(steps > 1);
+    println!("{} ({} bytes)", path.display(), data.len());
+    let _ = fs::remove_file(path);
 }

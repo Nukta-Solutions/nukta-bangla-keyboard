@@ -229,7 +229,9 @@ than the installed one, shows the update dialog. So:
 - In the release description, the lines starting with `- ` (at most five) are the dialog's
   "নতুন যা আছে", shown as you write them, so write them in Bangla. Everything else (paragraphs,
   headings, install steps) is only on the GitHub page. No bullet lines: the dialog has no notes box.
-- **ডাউনলোড** opens <https://www.nuktasolutions.com/nukta-bangla-keyboard>, so link the new release there.
+- **ডাউনলোড** takes the platform's own file from the release: on Windows the dialog downloads
+  `NuktaBangla-Setup.exe` and runs it; on macOS and Linux the browser downloads `NuktaBangla.dmg` or
+  `nukta-bangla-linux.sh`. A release without that platform's file opens its GitHub page instead.
 - Drafts and pre-releases are never offered: a release only reaches users once it is published.
 
 ## Development

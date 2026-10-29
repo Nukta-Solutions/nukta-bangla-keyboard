@@ -30,16 +30,19 @@ from collections import namedtuple
 from .settings import Settings, config_directory
 
 API_URL = "https://api.github.com/repos/Nukta-Solutions/nukta-bangla-keyboard/releases/latest"
-#: Where ডাউনলোড goes: the keyboard's page, which has every platform's installer.
+#: The keyboard's page, which has every platform's installer.
 WEBSITE = "https://www.nuktasolutions.com/nukta-bangla-keyboard"
+#: The Linux installer's name in every release (CLAUDE.md: never renamed).
+INSTALLER_ASSET = "nukta-bangla-linux.sh"
 #: How long between automatic checks, and how long "পরে" waits.
 DAY = 24 * 60 * 60
 #: Bullet lines shown in the dialog; the rest are on the release page.
 MAX_NOTES = 5
 STATE_FILE = "update.json"
 
-#: A published release: the version without the tag's "v" (1.0.3), its notes, and its GitHub page.
-Release = namedtuple("Release", "version notes url")
+#: A published release: the version without the tag's "v" (1.0.3), its notes, its GitHub page, and
+#: its Linux installer if it has one (what ডাউনলোড fetches).
+Release = namedtuple("Release", "version notes url download", defaults=(None,))
 
 
 def current():
@@ -106,7 +109,13 @@ def parse_release(data):
         return None
     body = value.get("body") if isinstance(value.get("body"), str) else ""
     url = value.get("html_url") if isinstance(value.get("html_url"), str) else WEBSITE
-    return Release(version, notes_from(body), url)
+    download = None
+    for asset in value.get("assets") if isinstance(value.get("assets"), list) else []:
+        if isinstance(asset, dict) and asset.get("name") == INSTALLER_ASSET:
+            link = asset.get("browser_download_url")
+            download = link if isinstance(link, str) else None
+            break
+    return Release(version, notes_from(body), url, download)
 
 
 def bangla_digits(text):
@@ -141,13 +150,17 @@ class State:
             notes = value.get("latestNotes")
             notes = [n for n in notes if isinstance(n, str)] if isinstance(notes, list) else []
             url = value.get("latestUrl")
-            self.latest = Release(version, notes, url if isinstance(url, str) else WEBSITE)
+            download = value.get("latestDownload")
+            self.latest = Release(version, notes, url if isinstance(url, str) else WEBSITE,
+                                  download if isinstance(download, str) else None)
 
     def save(self):
         value = {"lastCheck": self.last_check, "remindAfter": self.remind_after}
         if self.latest is not None:
             value.update(latestVersion=self.latest.version, latestNotes=list(self.latest.notes),
                          latestUrl=self.latest.url)
+            if self.latest.download:
+                value["latestDownload"] = self.latest.download
         if self.skipped is not None:
             value["skippedVersion"] = self.skipped
         try:

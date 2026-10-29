@@ -89,7 +89,7 @@ def _notify(mode):
     if mode in ("--update", "--update-background"):
         release = updates.State().latest
         title = "নুকতা বাংলা: নতুন সংস্করণ এসেছে"
-        body = f"সংস্করণ {updates.bangla_digits(release.version)} — {updates.WEBSITE}"
+        body = f"সংস্করণ {updates.bangla_digits(release.version)} — {release.download or release.url}"
         state = updates.State()
         state.mark_shown(time.time())
         state.save()
@@ -224,7 +224,9 @@ class UpdateDialog(Gtk.Window if Gtk else object):
         return False
 
     def _download(self, *_):
-        _open(updates.WEBSITE)
+        # The release's installer straight to Downloads, through the browser; a release without one
+        # opens its GitHub page instead.
+        _open(self.release.download or self.release.url)
         # Asked again in a day, in case it wasn't installed.
         self._later()
 

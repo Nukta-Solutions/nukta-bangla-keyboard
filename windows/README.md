@@ -39,8 +39,10 @@ what phonetic typing learns is kept in the same folder.
 ## Updates
 A minute after it starts, and then once a day, the top bar asks GitHub for the latest release. If it is
 newer than the installed version, the update dialog opens (without taking the keyboard from the app
-being typed in) with the release's bullet points under "নতুন যা আছে": **ডাউনলোড** opens the keyboard's
-website, **পরে** asks again the next day, and **এই সংস্করণ বাদ দিন** stays quiet until the next release.
+being typed in) with the release's bullet points under "নতুন যা আছে". **ডাউনলোড** fetches the release's
+`NuktaBangla-Setup.exe` right there, with a progress bar, and runs it without its wizard pages (`/SILENT`,
+after Windows asks for permission); the installer closes the old top bar and starts the new one.
+**পরে** asks again the next day, and **এই সংস্করণ বাদ দিন** stays quiet until the next release.
 Settings' **আপডেট** card turns the daily check off and on, and **এখনই খুঁজুন** checks straight away.
 What the last check found is kept in `%APPDATA%\Nukta Bangla\update.json`.
 

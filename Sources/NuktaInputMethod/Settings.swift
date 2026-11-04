@@ -1,7 +1,8 @@
 import Foundation
 import NuktaPhonetic
 
-/// The keyboard layout, shared by every app and kept across restarts.
+/// The keyboard layout, shared by every app and kept across restarts. Phonetic on a first
+/// install; whatever the user picks after that.
 enum Layout: String {
     case bijoy, phonetic
 }
@@ -21,7 +22,7 @@ enum Settings {
     private static let defaults = UserDefaults.standard
 
     static var layout: Layout {
-        get { value("layout", default: .bijoy) }
+        get { value("layout", default: .phonetic) }
         set { set("layout", newValue.rawValue) }
     }
 
@@ -89,6 +90,15 @@ enum Settings {
               defaults.persistentDomain(forName: current) == nil,
               let saved = defaults.persistentDomain(forName: old) else { return }
         defaults.setPersistentDomain(saved, forName: current)
+    }
+
+    /// Saves the layout once, on the first start: ফোনেটিক for a new user. Saved, it never changes
+    /// unless the user picks another, whatever later versions default to. Someone who typed with
+    /// an older version (বিজয় then) gets বিজয় saved by the installer (scripts/package.sh) instead.
+    static func saveFirstLayout() {
+        if defaults.string(forKey: "layout") == nil {
+            defaults.set(Layout.phonetic.rawValue, forKey: "layout")
+        }
     }
 
     private static func value<T: RawRepresentable>(_ key: String, default fallback: T) -> T where T.RawValue == String {

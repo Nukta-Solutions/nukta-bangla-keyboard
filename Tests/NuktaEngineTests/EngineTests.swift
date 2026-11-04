@@ -29,7 +29,14 @@ private func typeWithEdits(_ keys: String) -> (doc: String, rewrites: Int) {
     var doc = ""
     var shown = ""
     var rewrites = 0
+    // A ি ে ৈ waiting on its no-break space is marked text (as ClientWriter does), never in
+    // the document; only what comes before the space is.
     func apply(_ out: Output) {
+        let scalars = out.visible.unicodeScalars
+        if out.provisional, let space = scalars.firstIndex(of: "\u{00A0}") {
+            apply(Output(committed: out.committed, display: out.display, visible: String(scalars[..<space])))
+            return
+        }
         let edit = TextDiff.edit(from: shown, to: out.committed + out.visible)
         if !edit.deleted.isEmpty {
             rewrites += 1
@@ -280,6 +287,151 @@ final class EngineTests: XCTestCase {
         let next = e.process(character: "h")!
         XCTAssertEqual(next.committed, "ক্তি")
         XCTAssertEqual(next.display, "ব")
+    }
+
+    /// A ি ে ৈ typed before its consonant shows at once, on a no-break space that is never typed.
+    func testKarAheadShowsAtOnce() {
+        var e = Engine()
+        var out = e.process(character: "d")!
+        XCTAssertEqual(out.visible, "\u{00A0}\u{09BF}")
+        XCTAssertTrue(out.provisional)
+        out = e.process(character: "j")!
+        XCTAssertEqual(out.visible, "কি")
+        XCTAssertFalse(out.provisional)
+        e = Engine()
+        XCTAssertEqual(e.process(character: "c")?.visible, "\u{00A0}\u{09C7}")
+        XCTAssertEqual(e.process(character: "j")?.visible, "কে")
+        e = Engine()
+        XCTAssertEqual(e.process(character: "C")?.visible, "\u{00A0}\u{09C8}")
+        // Finished there, only the kar is typed, not the space.
+        e = Engine()
+        _ = e.process(character: "c")
+        XCTAssertEqual(e.commit().committed, "\u{09C7}")
+        // ে ে: the first is finished, the second waits on its own space.
+        e = Engine()
+        _ = e.process(character: "c")
+        out = e.process(character: "c")!
+        XCTAssertEqual(out.committed, "\u{09C7}")
+        XCTAssertEqual(out.visible, "\u{00A0}\u{09C7}")
+        XCTAssertTrue(out.provisional)
+        // After a finished syllable (কা + ে), it shows apart from কা.
+        e = Engine()
+        _ = e.process(character: "j")
+        _ = e.process(character: "f")
+        out = e.process(character: "c")!
+        XCTAssertEqual(out.committed, "কা")
+        XCTAssertEqual(out.visible, "\u{00A0}\u{09C7}")
+        // Backspace takes it off the screen again.
+        e = Engine()
+        _ = e.process(character: "c")
+        out = e.backspace()!
+        XCTAssertEqual(out.visible, "")
+        XCTAssertFalse(out.provisional)
+        // A ্ with nothing to sit on still waits for the next key.
+        e = Engine()
+        XCTAssertEqual(e.process(character: "g")?.visible, "")
+    }
+
+    /// What follows a ি ে ৈ typed ahead, before its consonant, shows too: c f → ো, c Q → েং.
+    func testWhatFollowsKarAheadShows() {
+        for (keys, shown) in [("cf", "\u{00A0}\u{09CB}"), ("cX", "\u{00A0}\u{09CC}"), ("cQ", "\u{00A0}\u{09C7}\u{0982}"),
+                              ("ds", "\u{00A0}\u{09BF}\u{09C1}"), ("c&", "\u{00A0}\u{09C7}\u{0981}")] {
+            let e = Engine()
+            var last: Output?
+            for ch in keys { last = e.process(character: ch) }
+            XCTAssertEqual(last?.visible, shown, keys)
+            XCTAssertEqual(last?.provisional, true, keys)
+        }
+        // The consonant still takes the kar when it comes straight after it.
+        let e = Engine()
+        _ = e.process(character: "c")
+        XCTAssertEqual(e.process(character: "j")?.visible, "কে")
+        XCTAssertEqual(e.process(character: "f")?.visible, "কো")
+        // And what is typed is what it always was, with no rewrite and no space left behind.
+        for keys in ["cf", "cfj", "cQ", "cQj", "cfcj", "cjf"] {
+            let typed = typeWithEdits(keys)
+            XCTAssertEqual(typed.doc, type(keys), keys)
+            XCTAssertEqual(typed.rewrites, 0, keys)
+            XCTAssertFalse(typed.doc.contains("\u{00A0}"), keys)
+        }
+    }
+
+    /// Every mix of up to five keys: whatever has been typed is on screen, never hidden. Only a
+    /// lone ্ (g, which may still become a full vowel) waits for the next key.
+    func testNothingTypedStaysHidden() {
+        // Consonants, kars before and after, ্, ফলা, রেফ, signs, অ and a literal.
+        let keys: [Character] = ["j", "i", "v", "c", "d", "C", "f", "s", "x", "X", "g", "z", "Z", "A", "Q", "&", "F", "G"]
+        var typed = ""
+        func walk(_ engine: Engine, depth: Int) {
+            guard depth > 0 else { return }
+            for key in keys {
+                let e = engine.copy()
+                typed.append(key)
+                let out = e.process(character: key)!
+                let loneHasanta = out.display == "\u{09CD}"
+                XCTAssertTrue(!out.visible.isEmpty || out.display.isEmpty || loneHasanta,
+                              "\(typed): \(out.display) is being typed but nothing shows")
+                walk(e, depth: depth - 1)
+                typed.removeLast()
+            }
+        }
+        walk(Engine(), depth: 5)
+    }
+
+    /// A ি ে ৈ pressed once after a consonant shows at once, apart, on a no-break space: the next
+    /// key decides whether it joins that consonant (j c c → কে) or the next one (হরেক).
+    func testWaitingKarShowsApart() {
+        let e = Engine()
+        _ = e.process(character: "i")
+        XCTAssertEqual(e.process(character: "v")?.committed, "হ")
+        var out = e.process(character: "c")!
+        XCTAssertEqual(out.committed, "")
+        XCTAssertEqual(out.visible, "র\u{00A0}\u{09C7}")
+        XCTAssertTrue(out.provisional)
+        out = e.process(character: "j")!
+        XCTAssertEqual(out.committed, "র")
+        XCTAssertEqual(out.visible, "কে")
+        XCTAssertFalse(out.provisional)
+        for (keys, shown) in [("jd", "ক\u{00A0}\u{09BF}"), ("jC", "ক\u{00A0}\u{09C8}"), ("jgkc", "ক্ত\u{00A0}\u{09C7}")] {
+            let e = Engine()
+            var last: Output?
+            for ch in keys { last = e.process(character: ch) }
+            XCTAssertEqual(last?.visible, shown, keys)
+            XCTAssertEqual(last?.provisional, true, keys)
+        }
+        // Pressed again, it joins the consonant; finished there, it is র + ে (no space typed).
+        let again = Engine()
+        _ = again.process(character: "j")
+        _ = again.process(character: "c")
+        out = again.process(character: "c")!
+        XCTAssertEqual(out.visible, "কে")
+        XCTAssertFalse(out.provisional)
+        let done = Engine()
+        _ = done.process(character: "v")
+        _ = done.process(character: "c")
+        XCTAssertEqual(done.commit().committed, "রে")
+        // Backspace takes it off again.
+        let back = Engine()
+        _ = back.process(character: "j")
+        _ = back.process(character: "c")
+        out = back.backspace()!
+        XCTAssertEqual(out.visible, "ক")
+        XCTAssertFalse(out.provisional)
+    }
+
+    /// The early kar is marked text, never typed into the document: the words still need no
+    /// rewrite, and nothing of the space is left behind.
+    func testKarAheadNeverRewrites() {
+        for (keys, expected) in [("cj", "কে"), ("dj", "কি"), ("Cj", "কৈ"), ("jfcV", "কালে"), ("c", "\u{09C7}"),
+                                 ("cc", "\u{09C7}\u{09C7}"), ("c⌫", ""), ("c⌫j", "ক"), ("hfQVfclM", "বাংলাদেশ"),
+                                 // pressed once after a consonant
+                                 ("ivcj", "হরকে"), ("icvj", "হরেক"), ("iWc", "হয়ে"), ("vc", "রে"), ("jcc", "কে"), ("jcV", "কলে"),
+                                 ("jdh", "কবি"), ("jCh", "কবৈ"), ("jc⌫", "ক"), ("icccvm", "হেরেম")] {
+            let typed = typeWithEdits(keys)
+            XCTAssertEqual(typed.doc, expected, keys)
+            XCTAssertEqual(typed.rewrites, 0, keys)
+            XCTAssertFalse(typed.doc.contains("\u{00A0}"), keys)
+        }
     }
 
     /// অ (Shift+F) is on screen as soon as it is typed, not only after the next key; an f still

@@ -3,18 +3,22 @@ import Foundation
 /// Result of one keystroke.
 /// `committed` is text that is final; `display` is the syllable still being built
 /// (it can still be reordered by later keys).
-/// `visible` is the part of `display` safe to put straight into a document: a syllable with no
-/// consonant yet (a waiting ি ে ৈ, a lone অ or g) stays off screen until the next key, so it
-/// never has to be rewritten.
+/// `visible` is what goes on screen for it: a trailing ্ stays off screen until the next key.
+/// `provisional`: `visible` ends with a ি ে ৈ on a no-break space that is never typed (typed
+/// before its consonant, or pressed once after one). The next key decides where it goes, so the
+/// writer shows that part, from the space on, as marked text rather than in the document
+/// (editors like Facebook ignore rewrites).
 public struct Output: Equatable {
     public var committed: String
     public var display: String
     public var visible: String
+    public var provisional: Bool
 
-    public init(committed: String, display: String, visible: String? = nil) {
+    public init(committed: String, display: String, visible: String? = nil, provisional: Bool = false) {
         self.committed = committed
         self.display = display
         self.visible = visible ?? display
+        self.provisional = provisional
     }
 }
 
@@ -46,7 +50,7 @@ public final class Engine {
             syllable.removeLast()
             if key == .kar(k) {
                 syllable.append(.preKar(k)) // rendered after the cluster
-                return Output(committed: committed, display: syllable.rendered, visible: syllable.visibleRendered)
+                return output()
             }
             commitSyllable()
             syllable.append(.preKar(k))
@@ -144,15 +148,16 @@ public final class Engine {
             }
         }
 
-        return Output(committed: committed, display: syllable.rendered, visible: syllable.visibleRendered)
+        return output()
     }
 
     /// Undoes the last keystroke of the current syllable. Returns nil when nothing
     /// is being composed (the caller should let the app handle backspace).
     public func backspace() -> Output? {
         guard !syllable.isEmpty else { return nil }
+        committed = ""
         syllable.removeLast()
-        return Output(committed: "", display: syllable.rendered, visible: syllable.visibleRendered)
+        return output()
     }
 
     /// Finalises the current syllable.
@@ -165,6 +170,20 @@ public final class Engine {
     public func reset() {
         syllable = Syllable()
         committed = ""
+    }
+
+    /// A copy in the same state (the tests walk every mix of keys from one).
+    func copy() -> Engine {
+        let engine = Engine()
+        engine.syllable = syllable
+        engine.committed = committed
+        return engine
+    }
+
+    /// This keystroke's result: what it finished, and the syllable now being typed.
+    private func output() -> Output {
+        Output(committed: committed, display: syllable.rendered, visible: syllable.visibleRendered,
+               provisional: syllable.showsKarApart)
     }
 
     private func commitSyllable() {

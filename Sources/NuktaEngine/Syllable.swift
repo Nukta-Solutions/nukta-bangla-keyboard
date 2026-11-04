@@ -11,7 +11,7 @@ struct Syllable: Equatable {
         case reph
         case sign(String)
         case vowel(String)
-        /// ি ে ৈ pressed once after a consonant; not shown until the next key decides.
+        /// ি ে ৈ pressed once after a consonant: shown apart until the next key decides.
         case waitingKar(String)
     }
 
@@ -62,17 +62,42 @@ struct Syllable: Equatable {
     mutating func append(_ token: Token) { tokens.append(token) }
     mutating func removeLast() { tokens.removeLast() }
 
-    /// Nothing goes on screen until there is a consonant to hang it on, and a trailing ্ waits
-    /// for the next key (it may turn into a full vowel: j g d → কই).
+    /// Begun with a ি ে ৈ typed before its consonant, which hasn't come yet (c → ে, waiting for
+    /// the j of কে; c f → ো, c Q → েং).
+    var isKarAhead: Bool {
+        guard !hasCluster, case .preKar = tokens.first else { return false }
+        return true
+    }
+
+    /// `visibleRendered` ends with a ি ে ৈ on a no-break space: typed ahead of its consonant, or
+    /// pressed once after one. The next key decides where it goes.
+    var showsKarApart: Bool {
+        isKarAhead || tokens.last.map(Self.isWaitingKar) == true
+    }
+
+    /// What is on screen while the syllable is being typed. Without a consonant only অ and a
+    /// ি ে ৈ typed ahead show; a trailing ্ waits for the next key (it may turn into a full
+    /// vowel: j g d → কই).
     var visibleRendered: String {
         guard hasCluster else {
             // অ (Shift+F) shows straight away; an f after it still turns it into আ.
             if case .vowel = tokens.first { return rendered }
+            // So does a ি ে ৈ typed before its consonant (c j → কে): ে now, কে with the j. It
+            // sits on a no-break space, so it neither clings to the letter before it (হে + ে
+            // showing as হেে) nor gets a dotted circle. The space is only shown, never typed.
+            // Whatever follows it before the consonant shows too (c f → ো, c Q → েং).
+            if isKarAhead { return "\u{00A0}" + rendered }
             return ""
         }
         guard lastIsHasanta || tokens.last.map(Self.isWaitingKar) == true else { return rendered }
         var withoutLink = self
         withoutLink.removeLast()
+        // A ি ে ৈ pressed once after a consonant (c after র in হরেক) most often waits for the
+        // next one: shown apart, on a no-break space, like one typed first. Pressed again it
+        // joins this consonant (j c c → কে).
+        if case .waitingKar(let k) = tokens.last {
+            return withoutLink.rendered + "\u{00A0}" + k
+        }
         return withoutLink.rendered
     }
 

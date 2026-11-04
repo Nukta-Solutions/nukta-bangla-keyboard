@@ -39,6 +39,9 @@ struct ClientWriter {
     /// A read-back failed while rewriting during this activation: stop trusting this field.
     private var untrusted = false
     private var syllableMode: Mode = .direct
+    /// A ি ে ৈ waiting for the next key is on screen as marked text after the syllable
+    /// (`Output.provisional`); the document holds only `shown`.
+    private var karMarked = false
     /// Exactly what is currently in the document (or marked text) for the syllable in progress.
     private var shown = ""
     /// After a rewrite: where the cursor must be if the app really did it. Checked on the next key,
@@ -54,6 +57,7 @@ struct ClientWriter {
         } ?? false
         untrusted = false
         shown = ""
+        karMarked = false
         context = ""
         pendingRewriteCheck = nil
         let app = bundleID ?? "?", marked = alwaysMarked
@@ -86,6 +90,12 @@ struct ClientWriter {
                 return fail(.textChanged, "rewrite ignored (cursor \(location), expected \(expected))")
             }
         }
+        // The ি ে ৈ waiting as marked text comes off: this key decides where it goes.
+        if karMarked {
+            client.setMarkedText("", selectionRange: NSRange(location: 0, length: 0),
+                                 replacementRange: NSRange(location: NSNotFound, length: 0))
+            karMarked = false
+        }
         if shown.isEmpty {
             syllableMode = chooseMode(for: client)
         }
@@ -94,7 +104,21 @@ struct ClientWriter {
             applyMarked(out, to: client)
             return nil
         case .direct:
-            return applyDirect(out, to: client)
+            // The waiting kar, from its no-break space on, may yet be rewritten (j c c → কে, or
+            // it goes to the next consonant), which some editors ignore: it is marked text, and
+            // only what comes before it goes into the document.
+            let scalars = out.visible.unicodeScalars
+            guard out.provisional, let space = scalars.firstIndex(of: "\u{00A0}") else {
+                return applyDirect(out, to: client)
+            }
+            let base = Output(committed: out.committed, display: out.display,
+                              visible: String(scalars[..<space]))
+            if let failure = applyDirect(base, to: client) { return failure }
+            let kar = String(scalars[space...])
+            client.setMarkedText(kar, selectionRange: NSRange(location: kar.utf16.count, length: 0),
+                                 replacementRange: NSRange(location: NSNotFound, length: 0))
+            karMarked = true
+            return nil
         }
     }
 

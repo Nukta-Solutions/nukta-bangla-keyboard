@@ -82,22 +82,7 @@ final class NuktaInputController: IMKInputController {
     }
 
     @objc func showAbout(_ sender: Any?) {
-        // Name, version, icon and copyright come from Info.plist.
-        // An agent app has to bring itself forward, or the panel opens behind the current app.
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: Self.credits])
-        NSApp.windows.filter(\.isVisible).forEach { $0.orderFrontRegardless() }
-    }
-
-    /// A one-word credit for the phonetic engine. The full licence notices ship in Resources/Licenses.
-    private static var credits: NSAttributedString {
-        let centered = NSMutableParagraphStyle()
-        centered.alignment = .center
-        return NSAttributedString(string: "কৃতজ্ঞতা: riti", attributes: [
-            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
-            .foregroundColor: NSColor.secondaryLabelColor,
-            .paragraphStyle: centered,
-        ])
+        AboutWindow.shared.show()
     }
 
     // MARK: Keys

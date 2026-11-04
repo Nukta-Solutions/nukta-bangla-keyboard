@@ -95,7 +95,7 @@ impl Syllable {
             // It sits on a no-break space, so it neither clings to the letter before it (হে + ে
             // showed as হেে) nor gets a dotted circle. The space is only shown, never typed.
             // Whatever follows it before the consonant shows too (c f → ো, c Q → েং).
-            // Windows only; Swift and Python still hold it back.
+            // macOS does the same (the kar as marked text); Python still holds it back.
             if matches!(self.tokens.first(), Some(Token::PreKar(_))) {
                 return format!("\u{00A0}{}", self.rendered());
             }

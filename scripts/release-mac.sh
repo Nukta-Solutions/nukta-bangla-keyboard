@@ -2,7 +2,8 @@
 # Adds NuktaBangla.dmg to a release from this Mac, for when the Release workflow skipped macOS
 # (no Apple signing secrets in the repository). Builds, signs and notarizes with scripts/package.sh
 # and the "nukta" notarytool profile, uploads the .dmg under its fixed name, and publishes the
-# release once the Windows and Linux files the workflow built are attached too.
+# release once the Windows and Linux files the workflow built are attached too, then points the
+# Homebrew cask in Nukta-Solutions/homebrew-tap at it.
 #
 #   scripts/release-mac.sh v1.0.2
 #
@@ -34,3 +35,26 @@ for name in NuktaBangla.dmg NuktaBangla-Setup.exe nukta-bangla-linux.sh; do
 done
 gh release edit "$TAG" --draft=false --latest
 echo "Published $TAG: $(gh release view "$TAG" --json url -q .url)"
+
+# Points the Homebrew cask at it, as the workflow's publish job does when it publishes: the version
+# and the sha256 of what users actually download, from the public URL the cask uses. Committed with
+# gh as whoever runs this, so it needs push access to the tap, not HOMEBREW_TAP_TOKEN.
+TAP=Nukta-Solutions/homebrew-tap
+CASK=Casks/nukta-bangla.rb
+SHA256="$(curl -fsSL --retry 5 --retry-all-errors \
+    "https://github.com/Nukta-Solutions/nukta-bangla-keyboard/releases/download/$TAG/NuktaBangla.dmg" \
+    | shasum -a 256 | cut -d' ' -f1)"
+FILE_SHA="$(gh api "repos/$TAP/contents/$CASK" -q .sha)"
+OLD="$(gh api "repos/$TAP/contents/$CASK" -q .content | base64 -d)"
+NEW="$(sed -E "s/^(  version )\"[^\"]*\"/\1\"$VERSION\"/; s/^(  sha256 )\"[^\"]*\"/\1\"$SHA256\"/" <<< "$OLD")"
+if ! grep -q "^  version \"$VERSION\"$" <<< "$NEW" || ! grep -q "^  sha256 \"$SHA256\"$" <<< "$NEW"; then
+    echo "Could not update version/sha256 in $TAP $CASK: bump it by hand" >&2
+    exit 1
+fi
+if [ "$NEW" = "$OLD" ]; then
+    echo "Cask already at $VERSION"
+else
+    gh api -X PUT "repos/$TAP/contents/$CASK" -f message="nukta-bangla $VERSION" \
+        -f content="$(printf '%s\n' "$NEW" | base64)" -f sha="$FILE_SHA" >/dev/null
+    echo "Cask $TAP $CASK: $VERSION, sha256 $SHA256"
+fi

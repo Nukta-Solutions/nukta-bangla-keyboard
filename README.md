@@ -209,8 +209,9 @@ git fetch --tags && git switch --detach v1.0.2
 scripts/release-mac.sh v1.0.2      # package.sh, upload NuktaBangla.dmg, publish once all three are there
 git switch -
 ```
-The Homebrew cask is only updated by the workflow; with this route, bump it in
-[homebrew-tap](https://github.com/Nukta-Solutions/homebrew-tap) by hand.
+Once it publishes, the script also sets the version and sha256 in
+[homebrew-tap](https://github.com/Nukta-Solutions/homebrew-tap)'s cask, committed with `gh` as you
+(you need push access to the tap; `HOMEBREW_TAP_TOKEN` is only for the workflow).
 
 To build the Mac release in CI instead, set these repository secrets (Settings → Secrets and variables →
 Actions):

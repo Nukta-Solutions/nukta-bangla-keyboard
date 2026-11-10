@@ -46,6 +46,21 @@ if [ -n "$ID" ] && [ "$ID" != "com.nuktasolutions.inputmethod.NuktaBangla" ]; th
     killall NuktaBangla 2>/dev/null || true
     rm -rf "$DIR/NuktaBangla.app"
 fi
+# A new user starts in ফোনেটিক (saved by the app on its first start). Someone already typing with
+# an older version that never saved a layout was in বিজয়, and stays there: saved here, for every
+# user whose keyboard settings name নুকতা বাংলা (enabled, selected or used lately).
+if [ "$ID" = "com.nuktasolutions.inputmethod.NuktaBangla" ]; then
+    for HOME_DIR in /Users/*; do
+        U="$(basename "$HOME_DIR")"
+        UID_="$(id -u "$U" 2>/dev/null)" || continue
+        [ "$UID_" -ge 501 ] || continue
+        AS=(launchctl asuser "$UID_" sudo -u "$U" defaults)
+        "${AS[@]}" read com.apple.HIToolbox 2>/dev/null \
+            | grep -q 'com.nuktasolutions.inputmethod.NuktaBangla' || continue
+        "${AS[@]}" read com.nuktasolutions.inputmethod.NuktaBangla layout >/dev/null 2>&1 && continue
+        "${AS[@]}" write com.nuktasolutions.inputmethod.NuktaBangla layout -string bijoy
+    done
+fi
 exit 0
 SH
 chmod +x "$WORK/scripts/preinstall"

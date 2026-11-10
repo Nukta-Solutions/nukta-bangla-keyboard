@@ -401,7 +401,7 @@ mod app {
             let mut ctx = Ctx { canvas: None, gfx: &app.gfx, hover: None, hits: Vec::new() };
             let height = match app.screen {
                 Screen::Settings => draw_settings(&mut ctx, &app.settings, app.check),
-                Screen::About => draw_about(&mut ctx),
+                Screen::About => draw_about(&mut ctx, app.check),
                 Screen::Update => draw_update(&mut ctx, app.release.as_ref(), true, app.download),
             };
             app.height = height;
@@ -812,24 +812,29 @@ mod app {
             ctx.toggle(inner + inner_width - 40.0, y + 10.0, auto, Action::AutoUpdate);
             y += 42.0 + 10.0;
             ctx.fill(Rect::new(inner, y, inner_width, 1.0), 0.0, BORDER);
-            y += 10.0;
-            let (status, color) = match check {
-                Check::Idle => (format!("এখন আছে সংস্করণ {}", bangla_version()), DIM),
-                Check::Checking => ("খোঁজা হচ্ছে…".to_owned(), DIM),
-                Check::Latest => ("আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।".to_owned(), INK),
-                Check::Found => ("নতুন সংস্করণ পাওয়া গেছে।".to_owned(), ORANGE),
-                Check::Failed => ("খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।".to_owned(), DIM),
-            };
-            let label = "এখনই খুঁজুন";
-            let button_width = ctx.gfx.text_width(label, Style::new(13.0)) + 32.0;
-            let status_width = inner_width - button_width - 16.0;
-            let status_style = Style::new(12.5).wrap();
-            let status_height = ctx.height(&status, status_style, status_width);
-            let row = status_height.max(34.0);
-            ctx.text(&status, Rect::new(inner, y + (row - status_height) / 2.0, status_width, status_height), status_style, color);
-            ctx.button(Rect::new(inner + inner_width - button_width, y + (row - 34.0) / 2.0, button_width, 34.0), label, Action::CheckNow, check != Check::Checking);
-            y + row
+            check_row(ctx, check, inner, y + 10.0, inner_width)
         })
+    }
+
+    /// What "এখনই খুঁজুন" last found, with the button beside it (in the update card and in About).
+    /// Returns its bottom.
+    fn check_row(ctx: &mut Ctx, check: Check, inner: f32, y: f32, inner_width: f32) -> f32 {
+        let (status, color) = match check {
+            Check::Idle => (format!("এখন আছে সংস্করণ {}", bangla_version()), DIM),
+            Check::Checking => ("খোঁজা হচ্ছে…".to_owned(), DIM),
+            Check::Latest => ("আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।".to_owned(), INK),
+            Check::Found => ("নতুন সংস্করণ পাওয়া গেছে।".to_owned(), ORANGE),
+            Check::Failed => ("খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।".to_owned(), DIM),
+        };
+        let label = "এখনই খুঁজুন";
+        let button_width = ctx.gfx.text_width(label, Style::new(13.0)) + 32.0;
+        let status_width = inner_width - button_width - 16.0;
+        let status_style = Style::new(12.5).wrap();
+        let status_height = ctx.height(&status, status_style, status_width);
+        let row = status_height.max(34.0);
+        ctx.text(&status, Rect::new(inner, y + (row - status_height) / 2.0, status_width, status_height), status_style, color);
+        ctx.button(Rect::new(inner + inner_width - button_width, y + (row - 34.0) / 2.0, button_width, 34.0), label, Action::CheckNow, check != Check::Checking);
+        y + row
     }
 
     // MARK: Update dialog (update-preview.html)
@@ -939,7 +944,7 @@ mod app {
 
     // MARK: About (about-preview.html)
 
-    fn draw_about(ctx: &mut Ctx) -> f32 {
+    fn draw_about(ctx: &mut Ctx, check: Check) -> f32 {
         let w = ABOUT_WIDTH;
         let center = w / 2.0;
         let mut y = 28.0 + 26.0;
@@ -971,10 +976,19 @@ mod app {
             x += width + 6.0;
         }
         y += 24.0 + 22.0;
-
-        // Credits.
         let left = 28.0;
         let card_width = w - 2.0 * left;
+
+        // Updates: "এখনই খুঁজুন" right here (the daily check's switch stays in সেটিংস).
+        y = with_card(ctx, left, y, card_width, |ctx| {
+            let inner = left + 14.0;
+            let inner_width = card_width - 28.0;
+            ctx.text("আপডেট", Rect::new(inner, y + 10.0, inner_width, 20.0), Style::new(12.0).weight(600), ORANGE);
+            check_row(ctx, check, inner, y + 12.0 + 20.0 + 6.0, inner_width) - 4.0
+        });
+        y += 12.0;
+
+        // Credits.
         let credits = [
             ("ফোনেটিক ইঞ্জিন", "riti · OpenBangla", "Mozilla Public License 2.0"),
             ("বাংলা ফন্ট", "Noto Serif Bengali · Google", "SIL Open Font License 1.1"),
@@ -1224,7 +1238,7 @@ mod app {
                                 draw_settings(&mut ctx, &app.settings, app.check);
                             }
                             Screen::About => {
-                                draw_about(&mut ctx);
+                                draw_about(&mut ctx, app.check);
                             }
                             Screen::Update => {
                                 draw_update(&mut ctx, app.release.as_ref(), app.opened.elapsed() >= GUARD, app.download);

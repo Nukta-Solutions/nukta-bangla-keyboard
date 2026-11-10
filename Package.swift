@@ -23,7 +23,7 @@ let package = Package(
         .executableTarget(
             name: "NuktaInputMethod",
             dependencies: ["NuktaEngine", "NuktaPhonetic"],
-            linkerSettings: [.linkedFramework("InputMethodKit")]
+            linkerSettings: [.linkedFramework("InputMethodKit"), .linkedFramework("Carbon")]
         ),
         .testTarget(name: "NuktaEngineTests", dependencies: ["NuktaEngine"]),
         .testTarget(name: "NuktaPhoneticTests", dependencies: ["NuktaPhonetic"]),

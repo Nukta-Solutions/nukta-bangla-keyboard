@@ -167,3 +167,23 @@ fn downloads_the_latest_installer_from_github() {
     println!("{} ({} bytes)", path.display(), data.len());
     let _ = fs::remove_file(path);
 }
+
+/// Releases are per platform: Windows is only offered one with its installer.
+#[test]
+fn offers_only_releases_with_the_windows_installer() {
+    let exe = r#"{"name": "NuktaBangla-Setup.exe", "browser_download_url": "https://example.com/Setup.exe"}"#;
+    let dmg = r#"{"name": "NuktaBangla.dmg", "browser_download_url": "https://example.com/mac.dmg"}"#;
+    let list = format!(
+        r#"[
+        {{"tag_name": "v1.0.8", "draft": true, "assets": [{exe}]}},
+        {{"tag_name": "v1.0.7", "prerelease": true, "assets": [{exe}]}},
+        {{"tag_name": "v1.0.6", "assets": [{dmg}]}},
+        {{"tag_name": "v1.0.5", "assets": [{exe}]}},
+        {{"tag_name": "v1.0.4", "assets": [{exe}, {dmg}]}}
+    ]"#
+    );
+    let release = nukta_bangla::update::newest_for_windows(list.as_bytes()).unwrap();
+    assert_eq!(release.version, "1.0.5", "not the macOS-only 1.0.6, the draft or the pre-release");
+    assert!(nukta_bangla::update::newest_for_windows(format!("[{{\"tag_name\": \"v2.0.0\", \"assets\": [{dmg}]}}]").as_bytes()).is_none());
+    assert!(nukta_bangla::update::newest_for_windows(b"{\"message\": \"rate limited\"}").is_none());
+}

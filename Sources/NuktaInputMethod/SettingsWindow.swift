@@ -2,230 +2,298 @@ import Cocoa
 import NuktaPhonetic
 
 /// সেটিংস, opened from the নু menu. Every change is saved and applied straight away.
+///
+/// The same design as on Windows (windows/design/settings-preview.html): dark, two columns, the
+/// layout and typing mode on the left, suggestions and shortcuts on the right. With বিজয় only the
+/// layout shows, across the whole width: Bijoy uses none of the rest. Under them, the update card.
+/// What is Windows-only (F12, the top bar, its sound) is left out; the Mac's own keys are shown.
 final class SettingsWindow: NSObject, NSWindowDelegate {
     static let shared = SettingsWindow()
 
     private var window: NSWindow?
-    private let layoutPopup = NSPopUpButton()
-    private var modeButtons: [(TypingMode, NSButton)] = []
-    private let autocorrect = NSButton(checkboxWithTitle: "অটোকারেক্ট: চেনা ভুল বানান ঠিক করে দেখাও", target: nil, action: nil)
-    private let emoji = NSButton(checkboxWithTitle: "ইমোজি সাজেশন দেখাও (হাসি → 😄)", target: nil, action: nil)
-    private let englishWord = NSButton(checkboxWithTitle: "টাইপ করা ইংরেজি শব্দটিও তালিকায় রাখো", target: nil, action: nil)
-    private let colonPopup = NSPopUpButton()
-    private let positionPopup = NSPopUpButton()
-    private let directionPopup = NSPopUpButton()
-    private let autoUpdate = NSButton(checkboxWithTitle: "দিনে একবার নিজে থেকে আপডেট খুঁজুন", target: nil, action: nil)
-    private let checkNowButton = NSButton(title: "এখনই খুঁজুন", target: nil, action: nil)
-    private let updateStatus = NSTextField(wrappingLabelWithString: "")
-    /// Everything that only matters for phonetic typing.
-    private var phoneticControls: [NSControl] = []
-    /// Everything that only matters while the suggestion list is in use.
-    private var suggestionControls: [NSControl] = []
+    /// What "এখনই খুঁজুন" last found, shown beside it.
+    private var status: (text: String, color: NSColor)?
+    private var checking = false
 
-    private static let layouts: [(Layout, String)] = [(.bijoy, "বিজয় লেআউট"), (.phonetic, "ফোনেটিক")]
+    private static let width: CGFloat = 860
+    private static let pad: CGFloat = 24
+    private static let gap: CGFloat = 16
+
     private static let modes: [(TypingMode, String, String)] = [
-        (.phoneticFirst, "ফোনেটিক আগে (প্রস্তাবিত)",
-         "যেমন বানান লিখবেন ঠিক তেমন বাংলা বসবে; তালিকা থেকে অন্য শব্দ বেছে নিলে পরের বার সেটাই আগে আসবে।"),
-        (.smart, "স্মার্ট",
-         "অভিধান আর অটোকারেক্ট সবচেয়ে মানানসই শব্দ বেছে দেবে (sonar → সোনার)।"),
-        (.phoneticOnly, "শুধু ফোনেটিক",
-         "সাজেশন তালিকা ছাড়া, অক্ষর ধরে ধরে লেখা।"),
+        (.phoneticFirst, "ফোনেটিক আগে",
+         "যেমন বানান লিখবেন ঠিক তেমন বাংলা বসবে। তালিকা থেকে অন্য শব্দ বেছে নিলে পরের বার সেটাই আগে আসবে।"),
+        (.smart, "স্মার্ট", "অভিধান আর অটোকারেক্ট সবচেয়ে মানানসই শব্দ বেছে দেবে (sonar → সোনার)।"),
+        (.phoneticOnly, "শুধু ফোনেটিক", "সাজেশন তালিকা ছাড়া, অক্ষর ধরে ধরে লেখা।"),
     ]
-    private static let colonChoices: [(Bool, String)] = [(false, "কোলন  :"), (true, "বিসর্গ  ঃ")]
-    private static let positions: [(PopupPosition, String)] = [(.below, "লেখার নিচে"), (.above, "লেখার উপরে")]
-    private static let directions: [(PopupDirection, String)] = [(.vertical, "উপর-নিচে তালিকা"), (.horizontal, "পাশাপাশি এক সারি")]
 
     func show() {
-        if window == nil { window = makeWindow() }
-        refresh()
+        let first = window == nil
+        if first {
+            let window = DarkWindow(contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 10),
+                                    styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+            window.title = "নুকতা বাংলা — সেটিংস"
+            Theme.style(window)
+            window.delegate = self
+            self.window = window
+        }
+        render()
         // An agent app has to bring itself forward, or the window opens behind the current app.
         NSApp.activate(ignoringOtherApps: true)
-        window?.center()
+        if first { window?.center() }
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
     }
 
     // MARK: Building
 
-    private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 10),
-                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "নুকতা বাংলা — সেটিংস"
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-
-        for (_, title) in Self.layouts { layoutPopup.addItem(withTitle: title) }
-        for (_, title) in Self.colonChoices { colonPopup.addItem(withTitle: title) }
-        for (_, title) in Self.positions { positionPopup.addItem(withTitle: title) }
-        for (_, title) in Self.directions { directionPopup.addItem(withTitle: title) }
-        for control in [layoutPopup, colonPopup, positionPopup, directionPopup, autocorrect, emoji, englishWord, autoUpdate] {
-            control.target = self
-            control.action = #selector(changed(_:))
-        }
-        checkNowButton.bezelStyle = .rounded
-        checkNowButton.target = self
-        checkNowButton.action = #selector(checkNow(_:))
-        updateStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        updateStatus.textColor = .secondaryLabelColor
-        updateStatus.preferredMaxLayoutWidth = 300
-        updateStatus.stringValue = "এখন আছে সংস্করণ \(Updates.banglaDigits(Updates.current))"
-        let checkRow = NSStackView(views: [checkNowButton, updateStatus])
-        checkRow.spacing = 10
-
-        let modeStack = NSStackView()
-        modeStack.orientation = .vertical
-        modeStack.alignment = .leading
-        modeStack.spacing = 8
-        for (mode, title, detail) in Self.modes {
-            let button = NSButton(radioButtonWithTitle: title, target: self, action: #selector(changed(_:)))
-            modeButtons.append((mode, button))
-            modeStack.addArrangedSubview(button)
-            modeStack.addArrangedSubview(Self.note(detail, indent: 20))
-        }
-
-        suggestionControls = [autocorrect, emoji, englishWord, positionPopup, directionPopup]
-        phoneticControls = modeButtons.map(\.1) + [colonPopup] + suggestionControls
-
-        let stack = NSStackView(views: [
-            Self.header("কিবোর্ড"),
-            Self.row("লেআউট:", layoutPopup),
-            Self.note("মেনু বারের নু আইকন থেকেও বদলানো যায়।"),
-            Self.separator(),
-            Self.header("ফোনেটিক টাইপিং"),
-            modeStack,
-            Self.row("কোলন (:) চাপলে:", colonPopup),
-            Self.note("কোলন বেছে নিলেও ঃ-ওয়ালা শব্দ তালিকায় পাবেন (dukho → দুঃখ)।"),
-            Self.separator(),
-            Self.header("সাজেশন"),
-            autocorrect,
-            emoji,
-            englishWord,
-            Self.row("তালিকা দেখাও:", positionPopup),
-            Self.row("সাজানো:", directionPopup),
-            Self.note("Space বা Enter: বাছাই করা শব্দ বসবে · ↑↓ বা Tab: বাছাই বদলাও · ১–৯: সরাসরি বাছাই · Esc: বাদ দাও"),
-            Self.separator(),
-            Self.header("আপডেট"),
-            autoUpdate,
-            checkRow,
-        ])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 20, left: 24, bottom: 24, right: 24)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let content = NSView()
-        content.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: content.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-            content.widthAnchor.constraint(equalToConstant: 480),
-        ])
-        window.contentView = content
-        return window
-    }
-
-    private static func header(_ text: String) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
-        return label
-    }
-
-    private static func note(_ text: String, indent: CGFloat = 0) -> NSView {
-        let label = NSTextField(wrappingLabelWithString: text)
-        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        label.textColor = .secondaryLabelColor
-        label.preferredMaxLayoutWidth = 432 - indent
-        guard indent > 0 else { return label }
-        let row = NSStackView(views: [label])
-        row.edgeInsets = NSEdgeInsets(top: -4, left: indent, bottom: 0, right: 0)
-        return row
-    }
-
-    private static func row(_ title: String, _ control: NSView) -> NSView {
-        let row = NSStackView(views: [NSTextField(labelWithString: title), control])
-        row.spacing = 8
-        return row
-    }
-
-    private static func separator() -> NSView {
-        let box = NSBox()
-        box.boxType = .separator
-        box.widthAnchor.constraint(equalToConstant: 432).isActive = true
-        return box
-    }
-
-    // MARK: State
-
-    /// Shows the saved settings.
-    private func refresh() {
-        layoutPopup.selectItem(at: Self.layouts.firstIndex { $0.0 == Settings.layout } ?? 0)
-        let mode = Settings.typingMode
-        for (buttonMode, button) in modeButtons {
-            button.state = buttonMode == mode ? .on : .off
-        }
-        autocorrect.state = Settings.autocorrect ? .on : .off
-        emoji.state = Settings.emoji ? .on : .off
-        englishWord.state = Settings.englishWord ? .on : .off
-        colonPopup.selectItem(at: Self.colonChoices.firstIndex { $0.0 == Settings.colonIsBisarga } ?? 0)
-        positionPopup.selectItem(at: Self.positions.firstIndex { $0.0 == Settings.popupPosition } ?? 0)
-        directionPopup.selectItem(at: Self.directions.firstIndex { $0.0 == Settings.popupDirection } ?? 0)
-        autoUpdate.state = Settings.autoUpdateCheck ? .on : .off
-        // Bijoy uses none of these, and phonetic-only has no list.
+    /// Builds the window's content from the saved settings; the window follows its height
+    /// (বিজয় ⇄ ফোনেটিক), its top staying where it is.
+    private func render() {
+        guard let window else { return }
         let phonetic = Settings.layout == .phonetic
-        for control in phoneticControls {
-            control.isEnabled = phonetic
+        let full = Self.width - 2 * Self.pad
+        let column = (full - Self.gap) / 2
+        let leftWidth = phonetic ? column : full
+
+        var left: [NSView] = [layoutCard(width: leftWidth)]
+        if phonetic { left.append(typingCard(width: column)) }
+        left.append(updateCard(width: leftWidth))
+        let leftColumn = Theme.vstack(left, spacing: Self.gap)
+        var columns: NSView = leftColumn
+        if phonetic {
+            let right = Theme.vstack([suggestionsCard(width: column), shortcutsCard(width: column)], spacing: Self.gap)
+            // Side by side, each column as tall as its own cards.
+            let row = NSView()
+            let fit = row.heightAnchor.constraint(equalToConstant: 0)
+            fit.priority = .defaultLow
+            for column in [leftColumn, right] {
+                column.translatesAutoresizingMaskIntoConstraints = false
+                row.addSubview(column)
+                column.topAnchor.constraint(equalTo: row.topAnchor).isActive = true
+                column.bottomAnchor.constraint(lessThanOrEqualTo: row.bottomAnchor).isActive = true
+            }
+            NSLayoutConstraint.activate([
+                fit,
+                leftColumn.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+                right.leadingAnchor.constraint(equalTo: leftColumn.trailingAnchor, constant: Self.gap),
+                right.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            ])
+            columns = row
         }
-        for control in suggestionControls {
-            control.isEnabled = phonetic && mode != .phoneticOnly
-        }
+
+        let titles = Theme.vstack([
+            Theme.label("নুকতা বাংলা", Fonts.ui(21, weight: .bold), Theme.ink),
+            Theme.label("সেটিংস · সংস্করণ \(Updates.banglaDigits(Updates.current))", Fonts.ui(13), Theme.dim),
+        ], spacing: 0)
+        let head = NSStackView(views: [Logo(width: 49), titles])
+        head.spacing = 14
+        head.alignment = .centerY
+
+        let foot = Theme.wrapping("পরিবর্তন সাথে সাথে সব অ্যাপে চালু হয়", Fonts.ui(12), Theme.faint, width: full,
+                                  alignment: .center)
+
+        let stack = Theme.vstack([head, columns, foot], spacing: 14)
+        stack.setCustomSpacing(20, after: head)
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: Self.pad, bottom: 18, right: Self.pad)
+
+        let content = Theme.content(stack, width: Self.width)
+        let old = window.frame
+        window.contentView = content
+        let size = window.frameRect(forContentRect: NSRect(origin: .zero, size: content.fittingSize)).size
+        window.setFrame(NSRect(x: old.minX, y: old.maxY - size.height, width: size.width, height: size.height),
+                        display: true)
     }
 
-    @objc private func changed(_ sender: NSControl) {
-        switch sender {
-        case layoutPopup:
-            Settings.layout = Self.layouts[layoutPopup.indexOfSelectedItem].0
-        case colonPopup:
-            Settings.colonIsBisarga = Self.colonChoices[colonPopup.indexOfSelectedItem].0
-        case autocorrect:
-            Settings.autocorrect = autocorrect.state == .on
-        case emoji:
-            Settings.emoji = emoji.state == .on
-        case englishWord:
-            Settings.englishWord = englishWord.state == .on
-        case positionPopup:
-            Settings.popupPosition = Self.positions[positionPopup.indexOfSelectedItem].0
-        case directionPopup:
-            Settings.popupDirection = Self.directions[directionPopup.indexOfSelectedItem].0
-        case autoUpdate:
-            Settings.autoUpdateCheck = autoUpdate.state == .on
-        default:
-            if let mode = modeButtons.first(where: { $0.1 === sender })?.0 {
-                Settings.typingMode = mode
+    /// A card: `views` one under another, 10 points apart (12 after the heading, or as `spacing`
+    /// says after a view), `width` wide.
+    private static func card(_ views: [NSView], width: CGFloat, spacing: [(NSView, CGFloat)] = []) -> Card {
+        let stack = Theme.vstack(views, spacing: 10)
+        if let heading = views.first {
+            stack.setCustomSpacing(12, after: heading)
+        }
+        for (view, space) in spacing {
+            stack.setCustomSpacing(space, after: view)
+        }
+        return Card(stack, width: width)
+    }
+
+    private func layoutCard(width: CGFloat) -> NSView {
+        let inner = width - 32
+        let layouts: [Layout] = [.bijoy, .phonetic]
+        let segments = Segmented(
+            [.init(title: "বিজয়", sub: "চেনা বিজয় লেআউট"), .init(title: "ফোনেটিক", sub: "ami → আমি")],
+            selected: layouts.firstIndex(of: Settings.layout) ?? 0, height: 54
+        ) { [weak self] index in
+            self?.change { Settings.layout = layouts[index] }
+        }
+        segments.widthAnchor.constraint(equalToConstant: inner).isActive = true
+        let hint = "⌃ Space চাপলে বাংলা চালু বা বন্ধ হয়। লেআউট মেনু বারের নু আইকন থেকেও বদলানো যায়।"
+        return Self.card([
+            Theme.heading("keyboard", "কিবোর্ড লেআউট"),
+            segments,
+            Theme.wrapping(hint, Fonts.ui(12.5), Theme.dim, width: inner),
+        ], width: width)
+    }
+
+    private func typingCard(width: CGFloat) -> NSView {
+        let inner = width - 32
+        let mode = Settings.typingMode
+        let modes = Self.modes.enumerated().map { index, entry in
+            ModeCard(title: entry.1, tag: index == 0 ? "প্রস্তাবিত" : nil, detail: entry.2, on: mode == entry.0,
+                     width: inner) { [weak self] in
+                self?.change { Settings.typingMode = entry.0 }
             }
         }
-        refresh()
+        let bisarga = Settings.colonIsBisarga
+        let colon = Segmented([.init(title: "কোলন  :"), .init(title: "বিসর্গ  দুঃ")], selected: bisarga ? 1 : 0,
+                              height: 36) { [weak self] index in
+            self?.change { Settings.colonIsBisarga = index == 1 }
+        }
+        colon.widthAnchor.constraint(equalToConstant: 190).isActive = true
+        let colonRow = Theme.row("কোলন (:) চাপলে",
+                                 detail: "কোলন বেছে নিলেও বিসর্গ-ওয়ালা শব্দ তালিকায় পাবেন (dukho → দুঃখ)।",
+                                 accessory: colon, accessoryWidth: 190, width: inner)
+        let list = Theme.vstack(modes, spacing: 8)
+        let rule = Theme.rule(width: inner)
+        return Self.card([Theme.heading("textformat", "টাইপিং মোড"), list, rule, colonRow], width: width,
+                         spacing: [(list, 12), (rule, 13)])
+    }
+
+    private func suggestionsCard(width: CGFloat) -> NSView {
+        let inner = width - 32
+        var views: [NSView] = [Theme.heading("list.bullet", "সাজেশন")]
+        let toggles: [(String, String, Bool, (Bool) -> Void)] = [
+            ("অটোকারেক্ট", "চেনা ভুল বানান ঠিক করে দেখাও", Settings.autocorrect, { Settings.autocorrect = $0 }),
+            ("ইমোজি", "হাসি → 😄", Settings.emoji, { Settings.emoji = $0 }),
+            ("ইংরেজি শব্দ", "টাইপ করা ইংরেজি শব্দটিও তালিকায় রাখো", Settings.englishWord, { Settings.englishWord = $0 }),
+        ]
+        for (index, (title, detail, on, set)) in toggles.enumerated() {
+            if index > 0 { views.append(Theme.rule(width: inner)) }
+            let toggle = Switch(on: on) { [weak self] in self?.change { set(!on) } }
+            views.append(Theme.row(title, detail: detail, accessory: toggle, accessoryWidth: 40, width: inner))
+        }
+        let positions: [PopupPosition] = [.below, .above]
+        let directions: [PopupDirection] = [.vertical, .horizontal]
+        let position = Segmented([.init(title: "লেখার নিচে"), .init(title: "লেখার উপরে")],
+                                 selected: positions.firstIndex(of: Settings.popupPosition) ?? 0, height: 36) { [weak self] index in
+            self?.change { Settings.popupPosition = positions[index] }
+        }
+        let direction = Segmented([.init(title: "উপর-নিচে"), .init(title: "পাশাপাশি")],
+                                  selected: directions.firstIndex(of: Settings.popupDirection) ?? 0, height: 36) { [weak self] index in
+            self?.change { Settings.popupDirection = directions[index] }
+        }
+        for (title, control) in [("তালিকার জায়গা", position), ("সাজানো", direction)] {
+            control.widthAnchor.constraint(equalToConstant: 190).isActive = true
+            views.append(Theme.rule(width: inner))
+            views.append(Theme.row(title, accessory: control, accessoryWidth: 190, width: inner))
+        }
+        let card = Self.card(views, width: width)
+        // Phonetic-only has no list: these don't apply to it.
+        if Settings.typingMode == .phoneticOnly { card.disable() }
+        return card
+    }
+
+    private func shortcutsCard(width: CGFloat) -> NSView {
+        let inner = width - 32
+        typealias Row = ([String], String)
+        let always: [Row] = [(["⌃", "+", "Space"], "বাংলা চালু বা বন্ধ (আগের কিবোর্ডে ফেরা)")]
+        let typing: [Row] = [
+            (["Space"], "বাছাই করা শব্দটা বসবে, সাথে একটা স্পেস"),
+            (["Return"], "বাছাই করা শব্দটা বসবে, নতুন লাইন হবে না"),
+            (["↑", "↓", "বা", "Tab"], "তালিকায় অন্য শব্দ বাছাই"),
+            (["1", "থেকে", "9"], "তালিকার ওই নম্বরের শব্দটা সরাসরি বসবে"),
+            (["Esc"], "শব্দটা বাতিল, কিছুই বসবে না"),
+            (["⌥", "+", "⌫"], "লিখতে থাকা পুরো শব্দটা একবারে মুছবে"),
+        ]
+        let keysWidth: CGFloat = 150
+        var views: [NSView] = [Theme.heading("command", "শর্টকাট")]
+        for (caption, rows) in [("সবসময়", always), ("ফোনেটিকে লেখার সময়, সাজেশন তালিকা খোলা থাকলে", typing)] {
+            let caption = Theme.caption(caption)
+            var lines: [NSView] = []
+            for (keys, meaning) in rows {
+                // Keys right-aligned in their column, with "বা" / "থেকে" / "+" between them.
+                let caps = NSStackView(views: keys.map { key -> NSView in
+                    ["বা", "থেকে", "+"].contains(key) ? Theme.label(key, Fonts.ui(11.5), Theme.dim) : KeyCap(key)
+                })
+                caps.spacing = 4
+                caps.translatesAutoresizingMaskIntoConstraints = false
+                let column = NSView()
+                column.addSubview(caps)
+                NSLayoutConstraint.activate([
+                    caps.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+                    caps.topAnchor.constraint(equalTo: column.topAnchor),
+                    caps.bottomAnchor.constraint(equalTo: column.bottomAnchor),
+                    column.widthAnchor.constraint(equalToConstant: keysWidth),
+                ])
+                let line = NSStackView(views: [
+                    column,
+                    Theme.wrapping(meaning, Fonts.ui(13), .hex(0xFFFFFF, 0.78), width: inner - keysWidth - 14),
+                ])
+                line.spacing = 14
+                line.alignment = .centerY
+                lines.append(line)
+            }
+            let group = Theme.vstack([caption] + lines, spacing: 9)
+            group.setCustomSpacing(8, after: caption)
+            views.append(group)
+        }
+        return Self.card(views, width: width, spacing: [(views[1], 18)])
+    }
+
+    private func updateCard(width: CGFloat) -> NSView {
+        let inner = width - 32
+        let auto = Settings.autoUpdateCheck
+        let toggle = Switch(on: auto) { [weak self] in self?.change { Settings.autoUpdateCheck = !auto } }
+        let button = DialogButton(title: "এখনই খুঁজুন", brand: false, target: self, action: #selector(checkNow(_:)))
+        button.isEnabled = !checking
+        let buttonWidth = button.constraints.first { $0.firstAttribute == .width }?.constant ?? 100
+        let status = status ?? ("এখন আছে সংস্করণ \(Updates.banglaDigits(Updates.current))", Theme.dim)
+        let label = Theme.wrapping(status.text, Fonts.ui(12.5), status.color, width: inner - buttonWidth - 16)
+        let checkRow = NSStackView(views: [label, button])
+        checkRow.spacing = 16
+        checkRow.alignment = .centerY
+        return Self.card([
+            Theme.heading("arrow.triangle.2.circlepath", "আপডেট"),
+            Theme.row("নিজে থেকে আপডেট খুঁজুন", detail: "দিনে একবার দেখে নেয় নতুন সংস্করণ এসেছে কি না",
+                      accessory: toggle, accessoryWidth: 40, width: inner),
+            Theme.rule(width: inner),
+            checkRow,
+        ], width: width)
+    }
+
+    // MARK: Changes
+
+    /// Saves a change and shows it. Rebuilt after the click that made it has been handled: the
+    /// control clicked is replaced.
+    private func change(_ save: @escaping () -> Void) {
+        save()
+        DispatchQueue.main.async { [weak self] in self?.render() }
     }
 
     /// "এখনই খুঁজুন": asks GitHub now. A new version opens the update dialog, even one skipped
     /// before: the user asked.
     @objc private func checkNow(_ sender: Any?) {
-        checkNowButton.isEnabled = false
-        updateStatus.stringValue = "খোঁজা হচ্ছে…"
+        checking = true
+        status = ("খোঁজা হচ্ছে…", Theme.dim)
+        DispatchQueue.main.async { [weak self] in self?.render() }
         Updates.shared.checkNow { [weak self] result in
             guard let self else { return }
-            self.checkNowButton.isEnabled = true
+            self.checking = false
             switch result {
             case .found(let release):
-                self.updateStatus.stringValue = "নতুন সংস্করণ পাওয়া গেছে।"
+                self.status = ("নতুন সংস্করণ পাওয়া গেছে।", Theme.orange)
                 UpdateWindow.shared.show(release, activate: true)
             case .latest:
-                self.updateStatus.stringValue = "আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।"
+                self.status = ("আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।", Theme.ink)
             case .failed:
-                self.updateStatus.stringValue = "খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"
+                self.status = ("খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।", Theme.dim)
             }
+            self.render()
         }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        // Opened again, it shows the version, not an old answer.
+        status = nil
     }
 }

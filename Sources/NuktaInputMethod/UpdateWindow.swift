@@ -58,10 +58,7 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
         panel.delegate = self
 
         // The head: logo, and from which version to which.
-        let icon = NSImageView(image: NSApp.applicationIconImage)
-        icon.imageScaling = .scaleProportionallyUpOrDown
-        icon.widthAnchor.constraint(equalToConstant: 56).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 56).isActive = true
+        let icon = Logo(width: 62)
         let title = Self.label("নতুন সংস্করণ এসেছে", Fonts.ui(19, weight: .bold), Self.ink)
         let versions = NSMutableAttributedString(
             string: "আপনার: \(Updates.banglaDigits(Updates.current))  →  ",
@@ -213,63 +210,5 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         panel = nil
         buttons = []
-    }
-}
-
-/// পরে and ডাউনলোড, drawn as in the design: a dark box, or the brand gradient.
-private final class DialogButton: NSButton {
-    private let brand: Bool
-
-    init(title: String, brand: Bool, target: AnyObject, action: Selector) {
-        self.brand = brand
-        super.init(frame: .zero)
-        self.title = title
-        self.target = target
-        self.action = action
-        isBordered = false
-        focusRingType = .none
-        let width = (title as NSString).size(withAttributes: [.font: Self.font(brand)]).width + (brand ? 36 : 28)
-        widthAnchor.constraint(equalToConstant: ceil(width)).isActive = true
-        heightAnchor.constraint(equalToConstant: 34).isActive = true
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("not used")
-    }
-
-    override var isEnabled: Bool {
-        didSet { needsDisplay = true }
-    }
-
-    private static func font(_ brand: Bool) -> NSFont {
-        brand ? Fonts.ui(13, weight: .semibold) : Fonts.ui(13)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
-        if brand {
-            NSGradient(starting: .hex(0xD13A0E), ending: .hex(0xE87A1E))?.draw(in: path, angle: 27)
-            if !isEnabled {
-                NSColor.hex(0x0D0807, 0.55).setFill()
-                path.fill()
-            }
-        } else {
-            NSColor.hex(isHighlighted ? 0x2B2220 : 0x241C1A).setFill()
-            path.fill()
-            NSColor.hex(0x2D2827).setStroke()
-            path.stroke()
-        }
-        let color: NSColor = brand ? .white : .hex(0xFFFFFF, isEnabled ? 0.92 : 0.32)
-        let attributes: [NSAttributedString.Key: Any] = [.font: Self.font(brand), .foregroundColor: color]
-        let size = (title as NSString).size(withAttributes: attributes)
-        (title as NSString).draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2),
-                                 withAttributes: attributes)
-    }
-}
-
-private extension NSColor {
-    static func hex(_ rgb: UInt32, _ alpha: CGFloat = 1) -> NSColor {
-        NSColor(srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255, green: CGFloat((rgb >> 8) & 0xFF) / 255,
-                blue: CGFloat(rgb & 0xFF) / 255, alpha: alpha)
     }
 }

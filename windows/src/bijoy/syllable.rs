@@ -83,8 +83,9 @@ impl Syllable {
         self.tokens.pop();
     }
 
-    /// What is on screen while the syllable is being typed: everything, except that a trailing ্
-    /// waits for the next key (it may turn into a full vowel: j g d → কই).
+    /// What is on screen while the syllable is being typed: everything, a trailing ্ included
+    /// (m g → ম্, so it is clear the next consonant joins it). Only a ্ with no consonant to sit on
+    /// waits for the next key.
     pub(crate) fn visible_rendered(&self) -> String {
         if !self.has_cluster() {
             // অ (Shift+F) shows straight away; an f after it still turns it into আ.
@@ -101,21 +102,30 @@ impl Syllable {
             }
             return String::new();
         }
-        let waiting = match self.tokens.last() {
-            Some(Token::WaitingKar(k)) => Some(*k),
-            _ => None,
-        };
-        if !self.last_is_hasanta() && waiting.is_none() {
-            return self.rendered();
+        if self.last_is_hasanta() && self.has_pre_kar() {
+            // A ি ে ৈ typed ahead (c j g, on the way to ক্তে) can't sit after the ্: ক্ে would
+            // show broken, with a dotted circle. Until the next consonant it stays apart, on its
+            // no-break space, ahead of the ক্: in the order it was typed.
+            let mut kars = String::new();
+            let mut rest = Syllable::default();
+            for token in &self.tokens {
+                match token {
+                    Token::PreKar(k) => kars.push_str(k),
+                    other => rest.push(other.clone()),
+                }
+            }
+            return format!("\u{00A0}{kars}{}", rest.rendered());
         }
-        let mut without_link = self.clone();
-        without_link.pop();
-        match waiting {
+        match self.tokens.last() {
             // A ি ে ৈ pressed once after a consonant (i c in হরেক, হয়ে) most often waits for the
             // next one: shown apart, on a no-break space, like one typed first. Pressed again
             // it joins this consonant (j c c → কে).
-            Some(kar) => format!("{}\u{00A0}{kar}", without_link.rendered()),
-            None => without_link.rendered(),
+            Some(Token::WaitingKar(kar)) => {
+                let mut without_kar = self.clone();
+                without_kar.pop();
+                format!("{}\u{00A0}{kar}", without_kar.rendered())
+            }
+            _ => self.rendered(),
         }
     }
 

@@ -84,6 +84,8 @@ name = "nukta-riti"
 version = "0.1.0"
 dependencies = [
  "riti",
+ "serde_json",
+ "upodesh",
 ]
 
 [[package]]

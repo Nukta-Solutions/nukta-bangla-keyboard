@@ -12,9 +12,9 @@ class Output:
     """Result of one keystroke.
 
     ``committed`` is text that is final; ``display`` is the syllable still being built (it can
-    still be reordered by later keys, so it belongs in the preedit). ``visible`` is the part of
-    ``display`` that would be safe to put straight into a document; the IBus front end shows the
-    whole preedit and does not need it.
+    still be reordered by later keys, so it belongs in the preedit). ``visible`` is what the preedit
+    shows for it: all of it, a trailing ্ included (``m g`` → ম্), except a lone ্ or a ি ে ৈ with
+    no consonant yet, which wait for the next key.
     """
 
     __slots__ = ("committed", "display", "visible")

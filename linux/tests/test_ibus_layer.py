@@ -166,10 +166,11 @@ class PendingKarIsHeldBackTests(unittest.TestCase):
                 engine.do_focus_out()
                 self.assertEqual(engine.committed, word)
 
-    def test_trailing_hasanta_is_held_back(self):
+    def test_trailing_hasanta_shows_at_once(self):
         e = self.type_keys("u")                    # জ
-        press(e, "g")                              # ্ — may yet become a full vowel (j g d → কই)
-        self.assertEqual(e.preedit, "জ")
+        press(e, "g")                              # ্ shows, so the next consonant clearly joins it
+        self.assertEqual(e.preedit, "জ্")
+        # A kar still turns it into a full vowel (j g d → কই).
         press(e, "d")
         e.do_focus_out()
         self.assertEqual(e.committed, "জই")

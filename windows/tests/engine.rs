@@ -162,7 +162,6 @@ fn visible_holds_back_what_has_no_consonant_yet() {
     // On a no-break space: no dotted circle, and not stuck to the letter before.
     assert_eq!(e.process_character('d').unwrap().visible, "\u{00A0}\u{09BF}");
     assert_eq!(e.process_character('j').unwrap().visible, "কি");
-    assert_eq!(e.process_character('g').unwrap().visible, "কি");
     let mut e = Engine::new();
     assert_eq!(e.process_character('c').unwrap().visible, "\u{00A0}\u{09C7}");
     assert_eq!(e.process_character('j').unwrap().visible, "কে");
@@ -202,6 +201,51 @@ fn visible_holds_back_what_has_no_consonant_yet() {
     e.process_character('v');
     e.process_character('c');
     assert_eq!(e.commit().committed, "রে");
+}
+
+/// The ্ after a consonant is on screen at once (m g → ম্), so it is clear the next consonant
+/// joins it. What is typed doesn't change.
+#[test]
+fn hasanta_shows_at_once() {
+    fn visible_after(keys: &str) -> String {
+        let mut e = Engine::new();
+        keys.chars().map(|c| e.process_character(c).unwrap().visible).last().unwrap()
+    }
+    assert_eq!(visible_after("mg"), "ম্");
+    assert_eq!(visible_after("mgr"), "ম্প");
+    // রেফ and a phala after it: র্ক্, ম্য.
+    assert_eq!(visible_after("jAg"), "র্ক্");
+    assert_eq!(visible_after("mgZ"), "ম্য");
+    // g g: the visible hasanta, finished.
+    let mut e = Engine::new();
+    e.process_character('m');
+    e.process_character('g');
+    let out = e.process_character('g').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("ম্\u{200C}", ""));
+    // g + kar still makes a full vowel: ক্ on screen, then কই.
+    let mut e = Engine::new();
+    e.process_character('j');
+    assert_eq!(e.process_character('g').unwrap().visible, "ক্");
+    let out = e.process_character('d').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("কই", ""));
+    // Backspace takes the ্ off again.
+    let mut e = Engine::new();
+    e.process_character('m');
+    e.process_character('g');
+    assert_eq!(e.backspace().unwrap().visible, "ম");
+    // A ি ে ৈ typed ahead stays apart, ahead of the ক্ (ক্ে would show broken), until the
+    // consonant that finishes the cluster: রক্তে.
+    assert_eq!(visible_after("cjg"), "\u{00A0}\u{09C7}ক্");
+    assert_eq!(visible_after("djg"), "\u{00A0}\u{09BF}ক্");
+    assert_eq!(visible_after("cjgk"), "ক্তে");
+    let mut e = Engine::new();
+    let typed: String = "vcjgk ".chars().map(|c| match e.process_character(c) {
+        Some(out) => out.committed,
+        None => e.commit().committed,
+    }).collect();
+    assert_eq!(typed, "রক্তে");
+    // A lone ্ (nothing to sit on) still waits.
+    assert_eq!(visible_after("g"), "");
 }
 
 /// অ (Shift+F) is on screen as soon as it is typed, not only after the next key; an f still

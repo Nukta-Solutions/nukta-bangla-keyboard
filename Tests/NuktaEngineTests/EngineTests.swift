@@ -332,6 +332,55 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(e.process(character: "g")?.visible, "")
     }
 
+    /// The ্ after a consonant is on screen at once (m g → ম্), so it is clear the next consonant
+    /// joins it. What is typed doesn't change.
+    func testHasantaShowsAtOnce() {
+        func visibleAfter(_ keys: String) -> Output? {
+            let e = Engine()
+            var last: Output?
+            for ch in keys { last = e.process(character: ch) }
+            return last
+        }
+        for (keys, shown) in [("mg", "ম্"), ("mgr", "ম্প"), ("jAg", "র্ক্"), ("mgZ", "ম্য")] {
+            XCTAssertEqual(visibleAfter(keys)?.visible, shown, keys)
+            XCTAssertEqual(visibleAfter(keys)?.provisional, false, keys)
+        }
+        // g g: the visible hasanta, finished.
+        var e = Engine()
+        _ = e.process(character: "m")
+        _ = e.process(character: "g")
+        var out = e.process(character: "g")!
+        XCTAssertEqual(out.committed, "ম্\u{200C}")
+        XCTAssertEqual(out.visible, "")
+        // g + kar still makes a full vowel: ক্ on screen, then কই.
+        e = Engine()
+        _ = e.process(character: "j")
+        XCTAssertEqual(e.process(character: "g")?.visible, "ক্")
+        out = e.process(character: "d")!
+        XCTAssertEqual(out.committed, "কই")
+        XCTAssertEqual(out.visible, "")
+        // Backspace takes the ্ off again.
+        e = Engine()
+        _ = e.process(character: "m")
+        _ = e.process(character: "g")
+        XCTAssertEqual(e.backspace()?.visible, "ম")
+        // A ি ে ৈ typed ahead stays apart, ahead of the ক্ (ক্ে would show broken), as marked
+        // text, until the consonant that finishes the cluster: রক্তে.
+        for (keys, shown) in [("cjg", "\u{00A0}\u{09C7}ক্"), ("djg", "\u{00A0}\u{09BF}ক্")] {
+            XCTAssertEqual(visibleAfter(keys)?.visible, shown, keys)
+            XCTAssertEqual(visibleAfter(keys)?.provisional, true, keys)
+        }
+        XCTAssertEqual(visibleAfter("cjgk")?.visible, "ক্তে")
+        XCTAssertEqual(visibleAfter("cjgk")?.provisional, false)
+        for keys in ["vcjgk", "mgr", "jgd", "mgZ"] {
+            XCTAssertEqual(typeWithEdits(keys).doc, type(keys), keys)
+            XCTAssertFalse(typeWithEdits(keys).doc.contains("\u{00A0}"), keys)
+        }
+        XCTAssertEqual(type("vcjgk"), "রক্তে")
+        // A lone ্ (nothing to sit on) still waits.
+        XCTAssertEqual(visibleAfter("g")?.visible, "")
+    }
+
     /// What follows a ি ে ৈ typed ahead, before its consonant, shows too: c f → ো, c Q → েং.
     func testWhatFollowsKarAheadShows() {
         for (keys, shown) in [("cf", "\u{00A0}\u{09CB}"), ("cX", "\u{00A0}\u{09CC}"), ("cQ", "\u{00A0}\u{09C7}\u{0982}"),

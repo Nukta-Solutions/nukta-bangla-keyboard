@@ -40,9 +40,9 @@
               background: #1A1312; font-size: 12.5px; color: var(--dim); }
   .titlebar svg.app { width: 18px; height: 14px; }
   .titlebar .spacer { flex: 1; }
-  .titlebar .btn { width: 46px; height: 36px; display: grid; place-items: center; }
-  .titlebar .btn:hover { background: rgba(255,255,255,.08); }
-  .titlebar .btn.close:hover { background: #C42B1C; }
+  .titlebar .tb { width: 46px; height: 36px; display: grid; place-items: center; }
+  .titlebar .tb:hover { background: rgba(255,255,255,.08); }
+  .titlebar .tb.close:hover { background: #C42B1C; }
   .titlebar svg.i { width: 14px; height: 14px; }
 
   .content { padding: 22px 24px 20px; display: flex; flex-direction: column; gap: 16px; }
@@ -110,6 +110,44 @@
   .when:first-of-type { margin-top: 2px; }
   .foot { font-size: 12px; color: var(--faint); text-align: center; margin-top: 2px; }
 
+  /* নিজের শর্টকাট: a small card here; the list is edited in its own dialog (beside it). */
+  .mine-row { display: flex; align-items: center; gap: 16px; }
+  .mine-row .label { flex: 1; font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+  .mine-row .label b { color: var(--ink); font-weight: 400; }
+  .btn { font: 13px/1.45 var(--font); color: var(--ink); background: var(--box); border: 1px solid var(--border);
+         border-radius: 6px; min-height: 34px; padding: 5px 14px; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--box-hover); }
+  .btn.primary { background: var(--brand); border-color: transparent; color: #fff; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+
+  .dialog { width: 460px; border-radius: 10px; overflow: hidden; background: var(--bg);
+            box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06); }
+  .dialog .content { padding: 22px 24px 18px; gap: 14px; }
+  .dialog h1 { margin: 0; font-size: 19px; font-weight: 700; }
+  .dialog .lead { margin: 4px 0 0; font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+  .add { display: grid; grid-template-columns: 96px 1fr auto; gap: 8px; }
+  .add input { min-width: 0; font: 14px/1.45 var(--font); color: var(--ink); background: var(--box);
+               border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; outline: none; }
+  .add input::placeholder { color: var(--faint); }
+  .add input:focus { border-color: #E87A1E; }
+  .add input.code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 13.5px; }
+  .add input.invalid, .add input.invalid:focus { border-color: #E5484D; box-shadow: inset 0 -2px 0 #E5484D; }
+  .error { margin: -6px 0 0; font-size: 12.5px; line-height: 1.6; color: #FF6B6B; }
+  .warn { margin: 0; font-size: 12.5px; line-height: 1.6; color: #F0A24E; }
+  .list { border: 1px solid var(--border); border-radius: 8px; background: var(--card); max-height: 262px; overflow-y: auto;
+          scrollbar-width: thin; scrollbar-color: #3A3230 transparent; }
+  .item { display: grid; grid-template-columns: 96px 1fr 28px; gap: 8px; align-items: center; padding: 8px 6px 8px 12px;
+          border-top: 1px solid var(--border); cursor: pointer; }
+  .item:first-child { border-top: 0; }
+  .item:hover { background: var(--box); }
+  .item.editing { background: #2A1A13; }
+  .item .c { font: 13px "Cascadia Mono", Consolas, monospace; color: #E87A1E; }
+  .item .t { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .x { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; color: var(--dim); }
+  .item .x:hover { background: var(--box-hover); color: var(--ink); }
+  .item .x svg { width: 14px; height: 14px; }
+  .empty { padding: 18px 14px; font-size: 13px; color: var(--dim); text-align: center; line-height: 1.7; }
+
   .phonetic-only { display: none; }
   .phonetic .phonetic-only { display: block; }
   .phonetic .col.phonetic-only { display: flex; }
@@ -132,6 +170,7 @@
     <symbol id="i-type" viewBox="0 0 24 24"><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
     <symbol id="i-command" viewBox="0 0 24 24"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="i-min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   </defs>
@@ -142,8 +181,8 @@
     <svg class="app" viewBox="0 0 37 28"><use href="#logo"/></svg>
     <span>নুকতা বাংলা — সেটিংস</span>
     <span class="spacer"></span>
-    <span class="btn"><svg class="i"><use href="#i-min"/></svg></span>
-    <span class="btn close"><svg class="i"><use href="#i-x"/></svg></span>
+    <span class="tb"><svg class="i"><use href="#i-min"/></svg></span>
+    <span class="tb close"><svg class="i"><use href="#i-x"/></svg></span>
   </div>
 
   <div class="content">
@@ -202,6 +241,14 @@
         <div class="row"><div class="label"><div class="t">সাজানো</div></div><div class="seg" data-group="dir"><button class="on">উপর-নিচে</button><button>পাশাপাশি</button></div></div>
       </div>
 
+      <div class="card" id="mine">
+        <h2><svg class="i"><use href="#i-zap"/></svg>নিজের শর্টকাট</h2>
+        <div class="mine-row">
+          <div class="label">ছোট কোড লিখলে পুরো লেখাটা তালিকার প্রথমে আসে: <b>asw → আসসালামু আলাইকুম</b>। <span id="count">২টা শর্টকাট আছে।</span></div>
+          <button class="btn" id="open">সাজান…</button>
+        </div>
+      </div>
+
       <div class="card">
         <h2><svg class="i"><use href="#i-command"/></svg>শর্টকাট</h2>
 
@@ -227,8 +274,34 @@
   </div>
 </div>
 
+<div class="dialog" id="dialog">
+  <div class="titlebar">
+    <svg class="app" viewBox="0 0 37 28"><use href="#logo"/></svg>
+    <span>নুকতা বাংলা — নিজের শর্টকাট</span>
+    <span class="spacer"></span>
+    <span class="tb close"><svg class="i"><use href="#i-x"/></svg></span>
+  </div>
+  <div class="content">
+    <div>
+      <h1>নিজের শর্টকাট</h1>
+      <p class="lead">কোডটা পুরো লিখলে লেখাটা তালিকার প্রথমে আসে, সাধারণ শব্দটা থাকে দ্বিতীয়তে। কোডের শুধু শুরুটা মিললে কিছু আসে না।</p>
+    </div>
+    <form class="add" id="add" autocomplete="off">
+      <input class="code" id="code" placeholder="কোড: asw" spellcheck="false">
+      <input id="text" maxlength="300" placeholder="পুরো লেখা" spellcheck="false">
+      <button class="btn primary" id="save" type="submit">যোগ করুন</button>
+    </form>
+    <p class="error" id="code-error" hidden>কোড ১২টা অক্ষরের বেশি হতে পারবে না।</p>
+    <p class="warn" id="warn" hidden></p>
+    <div class="list" id="list"></div>
+    <div class="foot">পরিবর্তন সাথে সাথে সব অ্যাপে চালু হয়</div>
+  </div>
+</div>
+
 <div class="note">
   <b>সেটিংস: নতুন ডিজাইনের প্রিভিউ</b><br>
+  • নতুন: ডানে <b>নিজের শর্টকাট</b> কার্ড। <b>সাজান…</b> চাপলে পাশের ডায়ালগ খোলে: যোগ, বদল আর মোছা সেখানে। পুরো তালিকা সেটিংসে রাখলে উইন্ডো ল্যাপটপের পর্দার চেয়ে লম্বা হয়ে যেত।<br>
+  • ডায়ালগে <b>ami</b> বা <b>asw</b> কোড দিয়ে দেখুন: অভিধানের শব্দ হলে সতর্ক করে, আবার চাপলে রাখে।<br>
   • উপরে <b>বিজয় / ফোনেটিক</b> বদলে দেখুন: বিজয়ে শুধু লেআউট, ফোনেটিকে সব অপশন।<br>
   • টাইপিং মোডে <b>শুধু ফোনেটিক</b> বাছলে সাজেশনের অংশ ধূসর হয়।<br>
   • সুইচ, বোতাম সব ক্লিক করে দেখা যায়।<br>
@@ -249,6 +322,64 @@
     document.querySelectorAll(".mode").forEach(x => x.classList.toggle("on", x === m));
     document.getElementById("suggestions").classList.toggle("disabled", m.dataset.mode === "only");
   });
+  // নিজের শর্টকাট
+  const SC = { asw: "আসসালামু আলাইকুম", tnx: "অনেক ধন্যবাদ" };
+  // A few of what the dictionary check finds (the real one asks the dictionary).
+  const WORDS = { ami: "আমি", asw: "অশ্ব", ty: "টয়", gm: "গম", bari: "বাড়ি", kemon: "কেমন", asl: "আসল" };
+  const bn = n => String(n).replace(/\d/g, d => "০১২৩৪৫৬৭৮৯"[d]);
+  const $ = id => document.getElementById(id);
+  const esc = t => t.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  let pending = null, editing = null;
+  function draw() {
+    const codes = Object.keys(SC).sort();
+    $("list").innerHTML = codes.length ? codes.map(c =>
+      `<div class="item${c === editing ? " editing" : ""}" data-c="${c}"><span class="c">${c}</span><span class="t">${esc(SC[c])}</span>` +
+      `<span class="x" data-x="${c}" title="মুছুন"><svg class="i"><use href="#i-x"/></svg></span></div>`).join("")
+      : `<div class="empty">এখনো কোনো শর্টকাট নেই।<br>যেমন: asw → আসসালামু আলাইকুম</div>`;
+    $("count").textContent = codes.length ? `${bn(codes.length)}টা শর্টকাট আছে।` : "এখনো কোনো শর্টকাট নেই।";
+  }
+  function reset() { pending = null; $("warn").hidden = true; $("save").textContent = editing ? "বদলান" : "যোগ করুন"; checkLength(); }
+  $("code").oninput = () => {
+    $("code").value = $("code").value.replace(/[^a-zA-Z]/g, "");
+    const c = $("code").value.toLowerCase();
+    editing = SC[c] ? c : null; reset(); draw();
+  };
+  // More than 12 letters: a red line under the code box and a red message, and it isn't saved.
+  function checkLength() {
+    const tooLong = $("code").value.length > 12;
+    $("code").classList.toggle("invalid", tooLong);
+    $("code-error").hidden = !tooLong;
+    return !tooLong;
+  }
+  $("text").oninput = reset;
+  $("add").onsubmit = e => {
+    e.preventDefault();
+    const code = $("code").value.trim().toLowerCase(), text = $("text").value.trim();
+    const warn = (t, label) => { $("warn").innerHTML = t; $("warn").hidden = false; if (label) $("save").textContent = label; };
+    if (!checkLength()) return $("code").focus();
+    if (code.length < 2) return warn("কোড অন্তত ২টা ইংরেজি অক্ষর।");
+    if (!text) return warn("পুরো লেখাটা দিন।");
+    if (pending !== code && WORDS[code] && !SC[code]) {
+      pending = code;
+      return warn(`<b>${code}</b> দিয়ে অভিধানের শব্দ «${WORDS[code]}»-ও লেখা হয়। শর্টকাট করলে ${WORDS[code]} লিখতে গেলে আগে শর্টকাট আসবে। তবুও রাখতে আবার চাপুন।`, "তবুও যোগ করুন");
+    }
+    SC[code] = text; $("code").value = ""; $("text").value = ""; editing = null; reset(); draw(); $("code").focus();
+  };
+  $("list").onclick = e => {
+    const x = e.target.closest("[data-x]");
+    if (x) {
+      delete SC[x.dataset.x];
+      if (editing === x.dataset.x) { editing = null; $("code").value = ""; $("text").value = ""; }
+      reset(); draw(); return;
+    }
+    const row = e.target.closest("[data-c]"); if (!row) return;
+    editing = row.dataset.c; $("code").value = editing; $("text").value = SC[editing]; reset(); draw(); $("text").focus();
+  };
+  $("open").onclick = () => $("dialog").scrollIntoView({ behavior: "smooth", block: "center" });
+  draw();
+  document.querySelectorAll(".mode").forEach(m => m.addEventListener("click", () =>
+    $("mine").classList.toggle("disabled", m.dataset.mode === "only")));
+
   if (location.hash === "#phonetic") document.querySelector('[data-layout="phonetic"]').click();
 </script>
 </body>

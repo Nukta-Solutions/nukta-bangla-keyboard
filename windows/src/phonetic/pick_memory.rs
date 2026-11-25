@@ -101,6 +101,16 @@ pub fn trim(text: &str) -> &str {
     text.trim_matches(|c| PUNCTUATION.contains(c))
 }
 
+/// The punctuation `trim` takes off the front and the back: `("(", "),")` for `(ami),`.
+pub fn affixes(text: &str) -> (&str, &str) {
+    let core = trim(text);
+    if core.is_empty() {
+        return (text, "");
+    }
+    let start = text.len() - text.trim_start_matches(|c| PUNCTUATION.contains(c)).len();
+    (&text[..start], &text[start + core.len()..])
+}
+
 fn modified(file: &Path) -> Option<SystemTime> {
     fs::metadata(file).and_then(|m| m.modified()).ok()
 }

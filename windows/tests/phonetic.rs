@@ -293,3 +293,78 @@ fn learning_in_another_process_is_picked_up() {
     second.type_keys("sonar");
     assert_eq!(second.marked, picked);
 }
+
+// MARK: The user's shortcuts (riti-bridge/src/shortcuts.rs)
+
+/// A data directory with `asw` → আসসালামু আলাইকুম.
+fn with_shortcut() -> (PathBuf, nukta_riti::shortcuts::Shortcuts) {
+    let directory = fresh_directory();
+    std::fs::create_dir_all(&directory).unwrap();
+    let mut shortcuts = nukta_riti::shortcuts::Shortcuts::new(&directory);
+    shortcuts.set("asw", "আসসালামু আলাইকুম").unwrap();
+    (directory, shortcuts)
+}
+
+const SALAM: &str = "আসসালামু আলাইকুম";
+
+#[test]
+fn a_shortcut_comes_first_and_the_plain_word_second() {
+    let plain = Rig::new().type_keys("asw").candidates()[0].clone();
+    let (directory, _) = with_shortcut();
+    let mut rig = Rig::in_directory(|_| {}, directory.clone());
+    rig.type_keys("asw");
+    assert_eq!(rig.candidates()[0], SALAM);
+    assert_eq!(rig.candidates()[1], plain);
+    assert_eq!(rig.marked, SALAM);
+    assert_eq!(rig.type_keys("␣").doc, format!("{SALAM} "));
+    // 2 types the plain word.
+    assert_eq!(Rig::in_directory(|_| {}, directory).type_keys("asw2").doc, plain);
+}
+
+#[test]
+fn only_the_whole_code_offers_a_shortcut() {
+    let (directory, _) = with_shortcut();
+    let mut rig = Rig::in_directory(|_| {}, directory.clone());
+    rig.type_keys("as");
+    assert!(!rig.candidates().iter().any(|c| c == SALAM), "{:?}", rig.candidates());
+    rig.type_keys("wa");
+    assert!(!rig.candidates().iter().any(|c| c == SALAM), "{:?}", rig.candidates());
+    // Any case.
+    assert_eq!(Rig::in_directory(|_| {}, directory).type_keys("Asw").candidates()[0], SALAM);
+}
+
+#[test]
+fn a_shortcut_works_in_smart_mode_too() {
+    let (directory, _) = with_shortcut();
+    let mut rig = Rig::in_directory(|o| o.mode = TypingMode::Smart, directory);
+    assert_eq!(rig.type_keys("asw␣").doc, format!("{SALAM} "));
+}
+
+#[test]
+fn punctuation_stays_around_a_shortcut() {
+    let (directory, _) = with_shortcut();
+    let mut rig = Rig::in_directory(|_| {}, directory.clone());
+    assert_eq!(rig.type_keys("asw,␣").doc, format!("{SALAM}, "));
+    // The plain word, picked before the comma, stays picked.
+    let mut rig = Rig::in_directory(|_| {}, directory);
+    rig.type_keys("asw↓");
+    let plain = rig.candidates()[1].clone();
+    assert_eq!(rig.type_keys(",␣").doc, format!("{plain}, "));
+}
+
+#[test]
+fn a_shortcut_added_meanwhile_is_offered_and_not_remembered_as_a_pick() {
+    let directory = fresh_directory();
+    let mut rig = Rig::in_directory(|_| {}, directory.clone());
+    let plain = rig.type_keys("asw").candidates()[0].clone();
+    rig.type_keys("⎋");
+    // The settings (another process) add it while the app is open.
+    let mut shortcuts = nukta_riti::shortcuts::Shortcuts::new(&directory);
+    shortcuts.set("asw", SALAM).unwrap();
+    rig.type_keys("asw␣");
+    assert_eq!(rig.doc, format!("{SALAM} "));
+    // Removed: the plain word again, not a remembered pick of the shortcut's text.
+    shortcuts.remove("asw");
+    rig.type_keys("asw␣");
+    assert_eq!(rig.doc, format!("{SALAM} {plain} "));
+}

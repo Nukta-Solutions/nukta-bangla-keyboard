@@ -82,16 +82,24 @@ class Syllable:
 
     @property
     def visible_rendered(self):
-        """Nothing goes on screen until there is a consonant to hang it on, and a trailing ্ waits
-        for the next key (it may turn into a full vowel: ``j g d`` → কই)."""
+        """Nothing goes on screen until there is a consonant to hang it on (a lone ্ waits for the
+        next key: it may turn into a full vowel). A trailing ্ after a consonant shows at once
+        (``m g`` → ম্), so it is clear the next consonant joins it."""
         if not self.has_cluster:
             # অ (Shift+F) shows straight away; an f after it still turns it into আ.
             if self.tokens and self.tokens[0][0] == "vowel":
                 return self.rendered
             return ""
-        if not (self.last_is_hasanta or self.waiting_kar is not None):
-            return self.rendered
-        return Syllable(self.tokens[:-1]).rendered
+        if self.last_is_hasanta and self.has_pre_kar:
+            # A ি ে ৈ typed ahead (c j g, on the way to ক্তে) can't sit after the ্: ক্ে would
+            # show broken, with a dotted circle. Until the next consonant it stays apart, on a
+            # no-break space (only shown, never typed), ahead of the ক্: in the order typed.
+            kars = "".join(t[1] for t in self.tokens if t[0] == "preKar")
+            rest = Syllable(t for t in self.tokens if t[0] != "preKar")
+            return "\N{NO-BREAK SPACE}" + kars + rest.rendered
+        if self.waiting_kar is not None:
+            return Syllable(self.tokens[:-1]).rendered
+        return self.rendered
 
     @property
     def rendered(self):

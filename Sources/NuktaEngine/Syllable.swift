@@ -69,15 +69,23 @@ struct Syllable: Equatable {
         return true
     }
 
-    /// `visibleRendered` ends with a ি ে ৈ on a no-break space: typed ahead of its consonant, or
-    /// pressed once after one. The next key decides where it goes.
-    var showsKarApart: Bool {
-        isKarAhead || tokens.last.map(Self.isWaitingKar) == true
+    /// A ি ে ৈ typed ahead, then its consonant and ্ (c j g, on the way to ক্তে): the kar can't
+    /// sit after the ্ (ক্ে shows broken, with a dotted circle), so until the next consonant it
+    /// shows apart, ahead of the ক্.
+    var isKarAheadOfLink: Bool {
+        lastIsHasanta && hasPreKar
     }
 
-    /// What is on screen while the syllable is being typed. Without a consonant only অ and a
-    /// ি ে ৈ typed ahead show; a trailing ্ waits for the next key (it may turn into a full
-    /// vowel: j g d → কই).
+    /// `visibleRendered` holds a ি ে ৈ on a no-break space, from the space to the end: typed
+    /// ahead of its consonant, pressed once after one, or ahead of a ্. The next key decides
+    /// where it goes.
+    var showsKarApart: Bool {
+        isKarAhead || isKarAheadOfLink || tokens.last.map(Self.isWaitingKar) == true
+    }
+
+    /// What is on screen while the syllable is being typed: everything, a trailing ্ included
+    /// (m g → ম্, so it is clear the next consonant joins it). Without a consonant only অ and a
+    /// ি ে ৈ typed ahead show; a lone ্ waits for the next key (it may turn into a full vowel).
     var visibleRendered: String {
         guard hasCluster else {
             // অ (Shift+F) shows straight away; an f after it still turns it into আ.
@@ -89,16 +97,23 @@ struct Syllable: Equatable {
             if isKarAhead { return "\u{00A0}" + rendered }
             return ""
         }
-        guard lastIsHasanta || tokens.last.map(Self.isWaitingKar) == true else { return rendered }
-        var withoutLink = self
-        withoutLink.removeLast()
+        if isKarAheadOfLink {
+            var kars = ""
+            var rest = Syllable()
+            for token in tokens {
+                if case .preKar(let k) = token { kars += k } else { rest.append(token) }
+            }
+            return "\u{00A0}" + kars + rest.rendered
+        }
         // A ি ে ৈ pressed once after a consonant (c after র in হরেক) most often waits for the
         // next one: shown apart, on a no-break space, like one typed first. Pressed again it
         // joins this consonant (j c c → কে).
         if case .waitingKar(let k) = tokens.last {
-            return withoutLink.rendered + "\u{00A0}" + k
+            var withoutKar = self
+            withoutKar.removeLast()
+            return withoutKar.rendered + "\u{00A0}" + k
         }
-        return withoutLink.rendered
+        return rendered
     }
 
     var rendered: String {

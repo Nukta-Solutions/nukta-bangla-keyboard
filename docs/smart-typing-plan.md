@@ -47,7 +47,12 @@ Dropped on 2026-11-23: grammar and standard-spelling suggestions (প্রম�
 - When the typed roman text equals a code, the expansion is the first suggestion and the normal transliteration
   is the second, so the plain word is one key away. A code that is only the start of what's typed shows nothing.
 - Adding a code that is also a dictionary word (e.g. `ami`) shows a warning.
-- Stored in the learned-data file (see 6).
+- Codes are 2–12 English letters, no digits (while a word is typed, 1–9 pick from the list); any case.
+- Stored in `shortcuts.json` in the data directory (code → text), apart from what is learned, so wiping the
+  learned data keeps them; export/import (6) carries both.
+- Built (2026-11-25): the engine in `riti-bridge/src/shortcuts.rs` (with C functions for macOS and Linux) and
+  the Windows list. Still to do: the Windows settings (preview in `windows/design/settings-preview.html`),
+  then macOS and Linux.
 
 ### 6. Control over learned data
 - Settings show what has been learned: the number of learned words, word pairs, picks and shortcuts.

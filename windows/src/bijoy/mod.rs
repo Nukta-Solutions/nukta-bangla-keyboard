@@ -12,8 +12,9 @@ use syllable::{independent_vowel, is_pre_base_kar, Syllable, Token, HASANTA};
 /// Result of one keystroke.
 ///
 /// `committed` is text that is final; `display` is the syllable still being built (it can still be
-/// reordered by later keys). `visible` is the part of `display` safe to show: a syllable with no
-/// consonant yet (a waiting ি ে ৈ, a lone অ or g) stays off screen until the next key.
+/// reordered by later keys). `visible` is what goes on screen for it: all of it, a trailing ্
+/// included, except a lone g (no consonant yet), which waits for the next key; a ি ে ৈ whose
+/// consonant isn't settled shows apart, on a no-break space that is never typed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Output {
     pub committed: String,

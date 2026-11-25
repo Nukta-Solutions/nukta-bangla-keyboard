@@ -1,9 +1,12 @@
 //! The static library the app links: riti's C API, plus a keycode lookup so Swift doesn't need to
-//! know riti's key numbering.
+//! know riti's key numbering, and the shared smart-typing engine (docs/smart-typing-plan.md), which
+//! so far is the user's shortcuts.
 
 // riti's C functions live in a private module of the riti crate. Naming the crate here links it in,
 // and its `#[no_mangle]` functions end up in this static library as they are.
 extern crate riti;
+
+pub mod shortcuts;
 
 use riti::keycodes::*;
 

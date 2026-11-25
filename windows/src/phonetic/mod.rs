@@ -2,7 +2,9 @@
 //! `linux/nukta_bangla/phonetic.py`). Pure logic, no Windows APIs: the TSF layer shows `Output`
 //! and `candidates`.
 //!
-//! Keep the three copies in step: a rule changed here is changed in Swift and Python too.
+//! Keep the three copies in step: a rule changed here is changed in Swift and Python too. The user's
+//! shortcuts are the first piece that isn't copied: their rules live once, in riti-bridge
+//! (`nukta_riti::shortcuts`), and each platform only places the shortcut in its list.
 
 pub mod pick_memory;
 pub mod riti;
@@ -11,6 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use nukta_riti::shortcuts::Shortcuts;
 use pick_memory::PickMemory;
 use riti::{Riti, RitiSuggestion};
 
@@ -133,14 +136,20 @@ pub struct PhoneticComposer {
     /// is the literal transliteration. riti's list contains it but doesn't say which entry it is.
     literal_riti: Option<Riti>,
     picks: PickMemory,
+    /// The user's shortcuts (`asw` → আসসালামু আলাইকুম), from the shared engine in riti-bridge.
+    shortcuts: Shortcuts,
     /// riti's file of learned picks as of our contexts' creation or our own last write to it.
     selection_stamp: Option<SystemTime>,
 
     /// The word when riti gives no list (phonetic-only mode, a lone punctuation mark).
     lonely: String,
     /// For each candidate, its index in riti's own list (the order differs after filtering and
-    /// moving the literal up).
-    riti_indices: Vec<usize>,
+    /// moving the literal up). None for the shortcut, which isn't riti's.
+    riti_indices: Vec<Option<usize>>,
+    /// Index in `candidates` of the user's shortcut for what was typed (always the first).
+    shortcut_index: Option<usize>,
+    /// The shortcut was selected when a punctuation mark that keeps the selection was typed.
+    keep_shortcut: bool,
     /// Index in `candidates` of the literal transliteration, if it is there.
     literal_index: Option<usize>,
     /// The literal transliteration of what was typed, from `literal_riti`.
@@ -163,9 +172,12 @@ impl PhoneticComposer {
             riti,
             literal_riti,
             picks: PickMemory::new(directory),
+            shortcuts: Shortcuts::new(directory),
             selection_stamp: selection_modified(directory),
             lonely: String::new(),
             riti_indices: Vec::new(),
+            shortcut_index: None,
+            keep_shortcut: false,
             literal_index: None,
             literal: String::new(),
             selection_moved: false,
@@ -271,7 +283,8 @@ impl PhoneticComposer {
             return if self.is_composing() { Output::marked(self.marked()) } else { Output::default() };
         }
         let text = self.candidates[index].clone();
-        if self.options.mode == TypingMode::PhoneticFirst {
+        // A shortcut is the user's own: nothing to remember about it.
+        if self.options.mode == TypingMode::PhoneticFirst && self.shortcut_index != Some(index) {
             if let Some(literal_index) = self.literal_index {
                 if index == literal_index || pick_memory::trim(&text) == pick_memory::trim(&self.literal) {
                     self.picks.forget(&self.auxiliary);
@@ -280,7 +293,7 @@ impl PhoneticComposer {
                 }
             }
         }
-        let learning = (self.options.mode == TypingMode::Smart).then(|| self.riti_indices[index]);
+        let learning = if self.options.mode == TypingMode::Smart { self.riti_indices[index] } else { None };
         self.end_word(learning);
         Output::insert(text)
     }
@@ -326,7 +339,8 @@ impl PhoneticComposer {
         if !keep_selection {
             self.selection_moved = false;
         }
-        let selection = if keep_selection { self.riti_indices[self.selected_index] } else { 0 };
+        self.keep_shortcut = keep_selection && self.shortcut_index == Some(self.selected_index);
+        let selection = if keep_selection { self.riti_indices[self.selected_index].unwrap_or(0) } else { 0 };
 
         // riti only reports what was typed with a list; this keeps it for a lonely answer too.
         self.auxiliary.push(character);
@@ -436,12 +450,13 @@ impl PhoneticComposer {
         }
 
         self.candidates = items.iter().map(|(t, _)| t.clone()).collect();
-        self.riti_indices = items.iter().map(|(_, i)| *i).collect();
+        self.riti_indices = items.iter().map(|(_, i)| Some(*i)).collect();
+        self.shortcut_index = None;
         if self.candidates.is_empty() {
             self.selected_index = 0;
             return;
         }
-        let riti_default = self.riti_indices.iter().position(|&i| i == riti_selection).unwrap_or(0);
+        let riti_default = self.riti_indices.iter().position(|&i| i == Some(riti_selection)).unwrap_or(0);
 
         let mut selection = if kept_selection || self.options.mode != TypingMode::PhoneticFirst {
             riti_default
@@ -465,11 +480,27 @@ impl PhoneticComposer {
             }
         }
         self.selected_index = selection;
+        self.add_shortcut(kept_selection);
+    }
+
+    /// The user's shortcut for what was typed, if any, goes first and is selected; what was first
+    /// (in phonetic-first, the plain transliteration) is second. Punctuation typed around the code
+    /// stays around the text (`asw,` → আসসালামু আলাইকুম,).
+    fn add_shortcut(&mut self, kept_selection: bool) {
+        let Some(text) = self.shortcuts.text_for(pick_memory::trim(&self.auxiliary)) else { return };
+        let (before, after) = pick_memory::affixes(&self.candidates[0]);
+        self.candidates.insert(0, format!("{before}{text}{after}"));
+        self.riti_indices.insert(0, None);
+        self.literal_index = self.literal_index.map(|i| i + 1);
+        self.shortcut_index = Some(0);
+        // After the user moved to another word, punctuation keeps that word.
+        self.selected_index = if kept_selection && !self.keep_shortcut { self.selected_index + 1 } else { 0 };
     }
 
     fn clear_list(&mut self) {
         self.candidates.clear();
         self.riti_indices.clear();
+        self.shortcut_index = None;
         self.literal_index = None;
         self.selected_index = 0;
     }
@@ -493,6 +524,7 @@ impl PhoneticComposer {
         self.auxiliary.clear();
         self.literal.clear();
         self.selection_moved = false;
+        self.keep_shortcut = false;
     }
 
     fn rebuild(&mut self) {

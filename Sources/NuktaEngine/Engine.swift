@@ -3,9 +3,11 @@ import Foundation
 /// Result of one keystroke.
 /// `committed` is text that is final; `display` is the syllable still being built
 /// (it can still be reordered by later keys).
-/// `visible` is what goes on screen for it: a trailing ্ stays off screen until the next key.
-/// `provisional`: `visible` ends with a ি ে ৈ on a no-break space that is never typed (typed
-/// before its consonant, or pressed once after one). The next key decides where it goes, so the
+/// `visible` is what goes on screen for it, a trailing ্ included (m g → ম্); only a lone ্
+/// waits for the next key.
+/// `provisional`: `visible` holds a ি ে ৈ on a no-break space that is never typed (typed
+/// before its consonant, pressed once after one, or ahead of a ্: c j g → ে ক্), from the space to
+/// the end. The next key decides where it goes, so the
 /// writer shows that part, from the space on, as marked text rather than in the document
 /// (editors like Facebook ignore rewrites).
 public struct Output: Equatable {

@@ -233,6 +233,37 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(nxt.committed, "ক্তি")
         self.assertEqual(nxt.display, "ব")
 
+    def test_hasanta_shows_at_once(self):
+        # The ্ after a consonant is in the preedit at once (m g → ম্), so it is clear the next
+        # consonant joins it. What is typed doesn't change.
+        def visible_after(keys):
+            e = Engine()
+            return [e.process_character(c) for c in keys][-1].visible
+
+        self.assertEqual(visible_after("mg"), "ম্")
+        self.assertEqual(visible_after("mgr"), "ম্প")
+        self.assertEqual(visible_after("jAg"), "র্ক্")
+        self.assertEqual(visible_after("mgZ"), "ম্য")
+        # g + kar still makes a full vowel: ক্ in the preedit, then কই.
+        e = Engine()
+        e.process_character("j")
+        self.assertEqual(e.process_character("g").visible, "ক্")
+        out = e.process_character("d")
+        self.assertEqual((out.committed, out.visible), ("কই", ""))
+        # Backspace takes the ্ off again.
+        e = Engine()
+        e.process_character("m")
+        e.process_character("g")
+        self.assertEqual(e.backspace().visible, "ম")
+        # A ি ে ৈ typed ahead stays apart, ahead of the ক্ (ক্ে would show broken), until the
+        # consonant that finishes the cluster: রক্তে.
+        self.assertEqual(visible_after("cjg"), "\N{NO-BREAK SPACE}েক্")
+        self.assertEqual(visible_after("djg"), "\N{NO-BREAK SPACE}িক্")
+        self.assertEqual(visible_after("cjgk"), "ক্তে")
+        self.assertEqual(type_keys("vcjgk"), "রক্তে")
+        # A lone ্ (nothing to sit on) still waits.
+        self.assertEqual(visible_after("g"), "")
+
     def test_a_shows_at_once(self):
         # অ (Shift+F) is on screen as soon as it is typed; an f still makes it আ.
         e = Engine()

@@ -38,6 +38,16 @@ if ($dumpbin) {
         }
     }
     Write-Host 'DLL exports checked.'
+
+    # The VC++ runtime is linked in (.cargo/config.toml): nothing may need VCRUNTIME140.dll or the
+    # api-ms-win-crt DLLs, which a fresh Windows may lack.
+    foreach ($target in $Targets) {
+        foreach ($file in 'nukta_bangla.dll', 'NuktaBangla.exe', 'NuktaBanglaSettings.exe') {
+            $deps = & $dumpbin.Source /dependents "target\$target\release\$file" | Out-String
+            if ($deps -match '(?i)vcruntime|msvcp|api-ms-win-crt') { throw "$target $file needs the VC++ runtime" }
+        }
+    }
+    Write-Host 'No VC++ runtime dependency.'
 }
 
 if ($SkipInstaller) { return }

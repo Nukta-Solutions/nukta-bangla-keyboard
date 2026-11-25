@@ -1,0 +1,5 @@
+# Links the Visual C++ runtime into the DLL and the programs, so they don't need VCRUNTIME140.dll:
+# a fresh Windows without the VC++ Redistributable couldn't register the DLL (RegSvr32 0x3) or start
+# the settings program. build.ps1 checks that no file depends on it.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

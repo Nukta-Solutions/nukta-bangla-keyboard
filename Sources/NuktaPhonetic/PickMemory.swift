@@ -48,6 +48,18 @@ final class PickMemory {
         text.trimmingCharacters(in: punctuation)
     }
 
+    /// The punctuation `trim` takes off the front and the back: `("(", "),")` for `(ami),`.
+    static func affixes(_ text: String) -> (before: String, after: String) {
+        let scalars = Array(text.unicodeScalars)
+        guard let first = scalars.firstIndex(where: { !punctuation.contains($0) }),
+              let last = scalars.lastIndex(where: { !punctuation.contains($0) })
+        else { return (text, "") }
+        var before = String.UnicodeScalarView(), after = String.UnicodeScalarView()
+        before.append(contentsOf: scalars[..<first])
+        after.append(contentsOf: scalars[(last + 1)...])
+        return (String(before), String(after))
+    }
+
     private func save() {
         let snapshot = picks, file = file
         queue.async {

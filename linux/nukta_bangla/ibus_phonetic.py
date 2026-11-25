@@ -88,6 +88,7 @@ class NuktaBanglaPhoneticEngine(ibus_engine.LayoutMenu, IBus.Engine):
         super().__init__()
         self._preedit = ""
         self._lookup_visible = False
+        self._latin_only = False
 
     # MARK: key handling
 
@@ -102,6 +103,10 @@ class NuktaBanglaPhoneticEngine(ibus_engine.LayoutMenu, IBus.Engine):
             return False       # no riti: every key belongs to the application
         session.claim(self)
         composer = session.composer
+        if self._latin_only:
+            # A box that asks for English letters (a password, the shortcut code).
+            self._apply(composer.commit())
+            return False
 
         # Shortcuts go to the application; Ctrl+⌫ and Alt+⌫ (delete the whole word) are ours,
         # as ⌥⌫ is on macOS.
@@ -186,6 +191,9 @@ class NuktaBanglaPhoneticEngine(ibus_engine.LayoutMenu, IBus.Engine):
             self._apply(out)
 
     # MARK: focus and state
+
+    def do_set_content_type(self, purpose, hints):
+        self._latin_only = int(purpose) in ibus_engine.LATIN_PURPOSES
 
     def do_focus_in(self):
         session = PhoneticSession.shared()

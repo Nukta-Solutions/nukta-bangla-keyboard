@@ -219,10 +219,17 @@ pub fn bangla_font_in(dir: &Path) -> Option<PathBuf> {
     font.exists().then_some(font)
 }
 
-/// The bundled Bangla font for a program in the install folder (the top bar, the settings).
+/// The bundled Bangla font for a program in the install folder (the top bar, the settings). A
+/// program run straight from the build (`windows\target\…\release\`) has no `fonts\` beside it, so
+/// it takes the repository's copy, `windows\assets\fonts\`, as the installed one would look.
 pub fn bangla_font_for_program() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    bangla_font_in(exe.parent()?)
+    let dir = exe.parent()?;
+    bangla_font_in(dir).or_else(|| {
+        dir.ancestors()
+            .map(|up| up.join("assets").join("fonts").join("NotoSerifBengali.ttf"))
+            .find(|font| font.exists())
+    })
 }
 
 /// The floating bar and tray icon, beside the settings program.

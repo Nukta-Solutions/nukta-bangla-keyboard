@@ -21,9 +21,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private static let modes: [(TypingMode, String, String)] = [
         (.phoneticFirst, "ফোনেটিক আগে",
-         "যেমন বানান লিখবেন ঠিক তেমন বাংলা বসবে। তালিকা থেকে অন্য শব্দ বেছে নিলে পরের বার সেটাই আগে আসবে।"),
-        (.smart, "স্মার্ট", "অভিধান আর অটোকারেক্ট সবচেয়ে মানানসই শব্দ বেছে দেবে (sonar → সোনার)।"),
-        (.phoneticOnly, "শুধু ফোনেটিক", "সাজেশন তালিকা ছাড়া, অক্ষর ধরে ধরে লেখা।"),
+         "যেমন লিখবেন তেমন বসবে। তালিকা থেকে বাছা শব্দ পরের বার আগে আসবে।"),
+        (.smart, "স্মার্ট", "অভিধান থেকে মানানসই শব্দ বসবে (sonar → সোনার)।"),
+        (.phoneticOnly, "শুধু ফোনেটিক", "তালিকা ছাড়া, অক্ষর ধরে ধরে।"),
     ]
 
     func show() {
@@ -61,7 +61,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let leftColumn = Theme.vstack(left, spacing: Self.gap)
         var columns: NSView = leftColumn
         if phonetic {
-            let right = Theme.vstack([suggestionsCard(width: column), shortcutsCard(width: column)], spacing: Self.gap)
+            let right = Theme.vstack([suggestionsCard(width: column), ownShortcutsCard(width: column),
+                                      shortcutsCard(width: column)], spacing: Self.gap)
             // Side by side, each column as tall as its own cards.
             let row = NSView()
             let fit = row.heightAnchor.constraint(equalToConstant: 0)
@@ -151,7 +152,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
         colon.widthAnchor.constraint(equalToConstant: 190).isActive = true
         let colonRow = Theme.row("কোলন (:) চাপলে",
-                                 detail: "কোলন বেছে নিলেও বিসর্গ-ওয়ালা শব্দ তালিকায় পাবেন (dukho → দুঃখ)।",
+                                 detail: "কোলন বাছলেও তালিকায় দুঃখ (dukho) পাবেন।",
                                  accessory: colon, accessoryWidth: 190, width: inner)
         let list = Theme.vstack(modes, spacing: 8)
         let rule = Theme.rule(width: inner)
@@ -163,9 +164,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let inner = width - 32
         var views: [NSView] = [Theme.heading("list.bullet", "সাজেশন")]
         let toggles: [(String, String, Bool, (Bool) -> Void)] = [
-            ("অটোকারেক্ট", "চেনা ভুল বানান ঠিক করে দেখাও", Settings.autocorrect, { Settings.autocorrect = $0 }),
+            ("অটোকারেক্ট", "চেনা ভুল বানান ঠিক করে", Settings.autocorrect, { Settings.autocorrect = $0 }),
             ("ইমোজি", "হাসি → 😄", Settings.emoji, { Settings.emoji = $0 }),
-            ("ইংরেজি শব্দ", "টাইপ করা ইংরেজি শব্দটিও তালিকায় রাখো", Settings.englishWord, { Settings.englishWord = $0 }),
+            ("ইংরেজি শব্দ", "ইংরেজি শব্দটিও তালিকায় থাকে", Settings.englishWord, { Settings.englishWord = $0 }),
         ]
         for (index, (title, detail, on, set)) in toggles.enumerated() {
             if index > 0 { views.append(Theme.rule(width: inner)) }
@@ -193,21 +194,44 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         return card
     }
 
+    /// নিজের শর্টকাট: how many, and সাজান…, which opens their window.
+    private func ownShortcutsCard(width: CGFloat) -> NSView {
+        let inner = width - 32
+        let count = Shortcuts(directory: Settings.dataDirectory).all.count
+        let howMany = count == 0 ? "এখনো কোনো শর্টকাট নেই।" : "\(Updates.banglaDigits(String(count)))টা শর্টকাট আছে।"
+        let button = DialogButton(title: "সাজান…", brand: false, target: self, action: #selector(openShortcuts(_:)))
+        let buttonWidth = button.constraints.first { $0.firstAttribute == .width }?.constant ?? 80
+        let summary = Theme.wrapping("ছোট কোড লিখলে পুরো লেখাটা তালিকার প্রথমে আসে: asw → আসসালামু আলাইকুম। \(howMany)",
+                                     Fonts.ui(12.5), Theme.dim, width: inner - buttonWidth - 16)
+        let row = NSStackView(views: [summary, button])
+        row.spacing = 16
+        row.alignment = .centerY
+        let card = Self.card([Theme.heading("bolt", "নিজের শর্টকাট"), row], width: width)
+        // Phonetic-only has no list, so no shortcuts either.
+        if Settings.typingMode == .phoneticOnly { card.disable() }
+        return card
+    }
+
+    @objc private func openShortcuts(_ sender: Any?) {
+        ShortcutsWindow.shared.onChange = { [weak self] in self?.render() }
+        ShortcutsWindow.shared.show()
+    }
+
     private func shortcutsCard(width: CGFloat) -> NSView {
         let inner = width - 32
         typealias Row = ([String], String)
         let always: [Row] = [(["⌃", "+", "Space"], "বাংলা চালু বা বন্ধ (আগের কিবোর্ডে ফেরা)")]
         let typing: [Row] = [
-            (["Space"], "বাছাই করা শব্দটা বসবে, সাথে একটা স্পেস"),
-            (["Return"], "বাছাই করা শব্দটা বসবে, নতুন লাইন হবে না"),
-            (["↑", "↓", "বা", "Tab"], "তালিকায় অন্য শব্দ বাছাই"),
-            (["1", "থেকে", "9"], "তালিকার ওই নম্বরের শব্দটা সরাসরি বসবে"),
-            (["Esc"], "শব্দটা বাতিল, কিছুই বসবে না"),
-            (["⌥", "+", "⌫"], "লিখতে থাকা পুরো শব্দটা একবারে মুছবে"),
+            (["Space"], "শব্দ বসবে, সাথে স্পেস"),
+            (["Return"], "শব্দ বসবে, নতুন লাইন নয়"),
+            (["↑", "↓", "বা", "Tab"], "অন্য শব্দ বাছাই"),
+            (["1", "থেকে", "9"], "ওই নম্বরের শব্দ বসবে"),
+            (["Esc"], "শব্দ বাতিল"),
+            (["⌥", "+", "⌫"], "পুরো শব্দ মুছবে"),
         ]
         let keysWidth: CGFloat = 150
         var views: [NSView] = [Theme.heading("command", "শর্টকাট")]
-        for (caption, rows) in [("সবসময়", always), ("ফোনেটিকে লেখার সময়, সাজেশন তালিকা খোলা থাকলে", typing)] {
+        for (caption, rows) in [("সবসময়", always), ("ফোনেটিকে তালিকা খোলা থাকলে", typing)] {
             let caption = Theme.caption(caption)
             var lines: [NSView] = []
             for (keys, meaning) in rows {
@@ -254,7 +278,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         checkRow.alignment = .centerY
         return Self.card([
             Theme.heading("arrow.triangle.2.circlepath", "আপডেট"),
-            Theme.row("নিজে থেকে আপডেট খুঁজুন", detail: "দিনে একবার দেখে নেয় নতুন সংস্করণ এসেছে কি না",
+            Theme.row("নিজে থেকে আপডেট খুঁজুন", detail: "দিনে একবার নতুন সংস্করণ দেখে",
                       accessory: toggle, accessoryWidth: 40, width: inner),
             Theme.rule(width: inner),
             checkRow,
@@ -284,9 +308,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self.status = ("নতুন সংস্করণ পাওয়া গেছে।", Theme.orange)
                 UpdateWindow.shared.show(release, activate: true)
             case .latest:
-                self.status = ("আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।", Theme.ink)
+                self.status = ("সর্বশেষ সংস্করণই আছে।", Theme.ink)
             case .failed:
-                self.status = ("খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।", Theme.dim)
+                self.status = ("খোঁজা গেল না। ইন্টারনেট দেখে আবার চেষ্টা করুন।", Theme.dim)
             }
             self.render()
         }

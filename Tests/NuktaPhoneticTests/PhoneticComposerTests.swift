@@ -203,4 +203,72 @@ final class PhoneticComposerTests: XCTestCase {
         XCTAssertFalse(rig.composer.isComposing)
         XCTAssertEqual(rig.type("sonar␣").doc, "সোনার ")
     }
+
+    // MARK: The user's shortcuts (riti-bridge/src/shortcuts.rs)
+
+    private let salam = "আসসালামু আলাইকুম"
+
+    /// A data directory with `asw` → আসসালামু আলাইকুম.
+    private func shortcutDirectory() -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("nukta-tests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        XCTAssertNoThrow(try Shortcuts(directory: directory).set(code: "asw", text: salam).get())
+        return directory
+    }
+
+    func testAShortcutComesFirstAndThePlainWordSecond() {
+        let plain = Rig().type("asw").composer.candidates[0]
+        let directory = shortcutDirectory()
+        let rig = Rig(directory: directory).type("asw")
+        XCTAssertEqual(rig.composer.candidates[0], salam)
+        XCTAssertEqual(rig.composer.candidates[1], plain)
+        XCTAssertEqual(rig.marked, salam)
+        XCTAssertEqual(rig.type("␣").doc, salam + " ")
+        // 2 types the plain word.
+        XCTAssertEqual(Rig(directory: directory).type("asw2").doc, plain)
+    }
+
+    func testOnlyTheWholeCodeOffersAShortcut() {
+        let directory = shortcutDirectory()
+        let rig = Rig(directory: directory).type("as")
+        XCTAssertFalse(rig.composer.candidates.contains(salam))
+        rig.type("wa")
+        XCTAssertFalse(rig.composer.candidates.contains(salam))
+        // Any case.
+        XCTAssertEqual(Rig(directory: directory).type("Asw").composer.candidates[0], salam)
+    }
+
+    func testAShortcutWorksInSmartModeToo() {
+        let rig = Rig({ $0.mode = .smart }, directory: shortcutDirectory())
+        XCTAssertEqual(rig.type("asw␣").doc, salam + " ")
+    }
+
+    func testPunctuationStaysAroundAShortcut() {
+        let directory = shortcutDirectory()
+        XCTAssertEqual(Rig(directory: directory).type("asw,␣").doc, salam + ", ")
+        // The plain word, picked before the comma, stays picked.
+        let rig = Rig(directory: directory).type("asw↓")
+        let plain = rig.composer.candidates[1]
+        XCTAssertEqual(rig.type(",␣").doc, plain + ", ")
+    }
+
+    func testAShortcutAddedMeanwhileIsOfferedAndNotRememberedAsAPick() {
+        let rig = Rig()
+        let plain = rig.type("asw").composer.candidates[0]
+        rig.type("⎋")
+        // The settings add it while the app is open.
+        let shortcuts = Shortcuts(directory: rig.directory)
+        XCTAssertNoThrow(try shortcuts.set(code: "asw", text: salam).get())
+        rig.type("asw␣")
+        XCTAssertEqual(rig.doc, salam + " ")
+        // Removed: the plain word again, not a remembered pick of the shortcut's text.
+        shortcuts.remove(code: "asw")
+        rig.type("asw␣")
+        XCTAssertEqual(rig.doc, "\(salam) \(plain) ")
+    }
+
+    func testDictionaryWordsAreNamed() {
+        XCTAssertEqual(Shortcuts.dictionaryWord(for: "ami"), "আমি")
+        XCTAssertNil(Shortcuts.dictionaryWord(for: "tnx"))
+    }
 }

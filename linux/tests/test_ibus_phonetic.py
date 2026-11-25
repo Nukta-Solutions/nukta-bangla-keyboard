@@ -145,6 +145,14 @@ class PhoneticLayerTests(unittest.TestCase):
         self.assertFalse(handled)                    # ⌃A selects all, as always
         self.assertEqual(e.committed, "আমি")
 
+    def test_a_box_that_asks_for_english_gets_every_key(self):
+        # A password box, or the shortcut code in the shortcuts dialog (IBus.InputPurpose.PASSWORD).
+        self.engine.do_set_content_type(8, 0)
+        self.assertFalse(press(self.engine, "a"))
+        self.assertEqual(self.engine.committed, "")
+        self.engine.do_set_content_type(0, 0)
+        self.assertTrue(press(self.engine, "a"))
+
     def test_a_modifier_on_its_own_leaves_the_word_alone(self):
         e = self.type_keys("ami")
         self.assertFalse(e.do_process_key_event(SHIFT_KEYVAL, SHIFT_KEYCODE, 0))

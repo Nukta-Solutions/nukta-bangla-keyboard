@@ -593,9 +593,15 @@ impl TextService_Impl {
             keystrokes.AdviseKeyEventSink(client, &key_sink, true)?;
             self.state.borrow_mut().key_sink_advised = true;
 
-            if let Ok(categories) = CoCreateInstance::<_, ITfCategoryMgr>(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER) {
-                if let Ok(atom) = categories.RegisterGUID(&GUID_DISPLAY_ATTRIBUTE) {
-                    self.state.borrow_mut().attribute = atom;
+            // No underline in Notepad. With its default font (no Bangla in it) Notepad draws
+            // underlined text without falling back to a Bangla font, so a juktakkhor being composed
+            // (ম্প) showed as boxes until it was finished; plain composed text gets the fallback
+            // like the rest. attribute stays 0, and set_composition_text then leaves it unmarked.
+            if !host_is_notepad() {
+                if let Ok(categories) = CoCreateInstance::<_, ITfCategoryMgr>(&CLSID_TF_CategoryMgr, None, CLSCTX_INPROC_SERVER) {
+                    if let Ok(atom) = categories.RegisterGUID(&GUID_DISPLAY_ATTRIBUTE) {
+                        self.state.borrow_mut().attribute = atom;
+                    }
                 }
             }
         }
@@ -808,4 +814,12 @@ fn start_bar() {
     unsafe {
         ShellExecuteW(None, w!("open"), PCWSTR(program.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
     }
+}
+
+/// The app this copy of the keyboard is loaded into is Notepad (Windows 11's, or the old one).
+fn host_is_notepad() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.file_name().map(|name| name.eq_ignore_ascii_case("notepad.exe")))
+        .unwrap_or(false)
 }

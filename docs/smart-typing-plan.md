@@ -53,7 +53,12 @@ Dropped on 2026-11-23: grammar and standard-spelling suggestions (প্রম�
 - Built (2026-11-25): the engine in `riti-bridge/src/shortcuts.rs` (with C functions for macOS and Linux), the
   Windows list, and the Windows settings: a card with সাজান…, which opens the shortcuts dialog
   (`NuktaBanglaSettings.exe --shortcuts`, `windows/src/bin/settings/shortcuts.rs`). The code box is marked
-  English-only and the text service leaves its keys alone (`win::mark_latin_only`). Still to do: macOS and Linux.
+  English-only and the text service leaves its keys alone (`win::mark_latin_only`). macOS and Linux (2026-11-25, not yet built on
+  those systems): the same list (`Sources/NuktaPhonetic/Shortcuts.swift`, `linux/nukta_bangla/shortcuts.py`),
+  a settings card with সাজান… and a window on macOS (`ShortcutsWindow.swift`; the code box lets only English
+  keyboards in, the text box also takes English letters and turns them into Bangla), and on Linux a
+  "নিজের শর্টকাট…" menu item opening a GTK dialog (`shortcuts_dialog.py`; the code box is a password box that
+  shows its text, and the engines leave password boxes alone).
 
 ### 6. Control over learned data
 - Settings show what has been learned: the number of learned words, word pairs, picks and shortcuts.

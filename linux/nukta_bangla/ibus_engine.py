@@ -77,6 +77,12 @@ SHORTCUT_MASK = (IBus.ModifierType.CONTROL_MASK
                  | IBus.ModifierType.META_MASK)
 
 
+#: Input purposes (IBus.InputPurpose) that want English letters whatever the layout, so the engines
+#: leave their keys to the application: a password, a PIN, and the code box of the shortcuts dialog
+#: (shortcuts_dialog.py, which marks it as a password box that shows its text).
+LATIN_PURPOSES = (8, 9)  # PASSWORD, PIN
+
+
 #: The two engines, in the order the layout menu lists them. Each is an input source of its own
 #: in the desktop's keyboard settings; the menu switches between them without going there.
 LAYOUTS = (
@@ -130,6 +136,10 @@ class LayoutMenu:
         update_items.append(IBus.Property.new(
             "update:check", IBus.PropType.NORMAL, IBus.Text.new_from_string("এখনই আপডেট খুঁজুন"),
             "", blank, True, True, IBus.PropState.UNCHECKED, None))
+        properties.append(IBus.Property.new(
+            "shortcuts", IBus.PropType.NORMAL, IBus.Text.new_from_string("নিজের শর্টকাট…"), "",
+            IBus.Text.new_from_string("নুকতা বাংলা: নিজের শর্টকাট (asw → আসসালামু আলাইকুম)"),
+            True, True, IBus.PropState.UNCHECKED, None))
         properties.append(IBus.Property.new("update", IBus.PropType.MENU,
                                             IBus.Text.new_from_string("আপডেট"), "",
                                             IBus.Text.new_from_string("নুকতা বাংলা: আপডেট"),
@@ -143,6 +153,9 @@ class LayoutMenu:
             self.register_properties(self.layout_properties())
         elif name == "update:check":
             updates.check_now()
+        elif name == "shortcuts":
+            from .shortcuts import open_dialog     # here: it loads riti, which Bijoy doesn't need
+            open_dialog()
         else:
             self.switch_layout(name, state)
 
@@ -165,6 +178,7 @@ class NuktaBanglaEngine(LayoutMenu, IBus.Engine):
         super().__init__()
         self._engine = Engine()
         self._preedit = ""
+        self._latin_only = False
 
     # MARK: key handling
 
@@ -175,7 +189,7 @@ class NuktaBanglaEngine(LayoutMenu, IBus.Engine):
         if keyval in MODIFIER_KEYVALS:
             return False       # a modifier alone: leave the syllable exactly as it is
 
-        if state & SHORTCUT_MASK:
+        if state & SHORTCUT_MASK or self._latin_only:
             self._flush()
             return False
 
@@ -205,6 +219,9 @@ class NuktaBanglaEngine(LayoutMenu, IBus.Engine):
 
     def do_property_activate(self, name, state):
         self.menu_activate(name, state)
+
+    def do_set_content_type(self, purpose, hints):
+        self._latin_only = int(purpose) in LATIN_PURPOSES
 
     def do_focus_in_id(self, object_path, client):  # ibus 1.5.27+
         self.do_focus_in()

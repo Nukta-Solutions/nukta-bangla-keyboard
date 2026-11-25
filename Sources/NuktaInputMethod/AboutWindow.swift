@@ -95,9 +95,9 @@ final class AboutWindow: NSObject {
                 self.show("নতুন সংস্করণ পাওয়া গেছে।", Theme.orange)
                 UpdateWindow.shared.show(release, activate: true)
             case .latest:
-                self.show("আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।", Theme.ink)
+                self.show("সর্বশেষ সংস্করণই আছে।", Theme.ink)
             case .failed:
-                self.show("খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।", Theme.dim)
+                self.show("খোঁজা গেল না। ইন্টারনেট দেখে আবার চেষ্টা করুন।", Theme.dim)
             }
         }
     }

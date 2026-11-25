@@ -52,12 +52,18 @@ public final class PhoneticComposer {
     /// is the literal transliteration. riti's list contains it but doesn't say which entry it is.
     private var literalRiti: RitiContext?
     private let picks: PickMemory
+    /// The user's shortcuts (`asw` → আসসালামু আলাইকুম), from the shared engine in riti-bridge.
+    private let shortcuts: Shortcuts
 
     /// The word when riti gives no list (phonetic-only mode, a lone punctuation mark).
     private var lonely = ""
     /// For each candidate, its index in riti's own list (the order differs after filtering and
-    /// moving the literal up).
-    private var ritiIndices: [Int] = []
+    /// moving the literal up). nil for the shortcut, which isn't riti's.
+    private var ritiIndices: [Int?] = []
+    /// Index in `candidates` of the user's shortcut for what was typed (always the first).
+    private var shortcutIndex: Int?
+    /// The shortcut was selected when a punctuation mark that keeps the selection was typed.
+    private var keepShortcut = false
     /// Index in `candidates` of the literal transliteration, if it is there.
     private var literalIndex: Int?
     /// The literal transliteration of what was typed, from `literalRiti`.
@@ -75,6 +81,7 @@ public final class PhoneticComposer {
         self.options = options
         self.directory = directory
         picks = PickMemory(directory: directory)
+        shortcuts = Shortcuts(directory: directory)
         (riti, literalRiti) = Self.makeContexts(options: options, directory: directory)
     }
 
@@ -138,7 +145,8 @@ public final class PhoneticComposer {
             return isComposing ? Output(marked: marked) : Output()
         }
         let text = candidates[index]
-        if options.mode == .phoneticFirst, let literalIndex {
+        // A shortcut is the user's own: nothing to remember about it.
+        if options.mode == .phoneticFirst, let literalIndex, index != shortcutIndex {
             if index == literalIndex || PickMemory.trim(text) == PickMemory.trim(literal) {
                 picks.forget(auxiliary)
             } else if !Self.containsEmoji(text) {
@@ -191,7 +199,8 @@ public final class PhoneticComposer {
         // After the user moved the selection, punctuation keeps it: riti is told which entry it was.
         let keepSelection = selectionMoved && !candidates.isEmpty && Self.selectionKeepers.contains(character)
         if !keepSelection { selectionMoved = false }
-        let selection = keepSelection ? ritiIndices[selectedIndex] : 0
+        keepShortcut = keepSelection && shortcutIndex == selectedIndex
+        let selection = keepSelection ? (ritiIndices[selectedIndex] ?? 0) : 0
 
         // riti only reports what was typed with a list; this keeps it for a lonely answer too.
         auxiliary.append(character)
@@ -285,7 +294,8 @@ public final class PhoneticComposer {
         }
 
         candidates = items.map(\.text)
-        ritiIndices = items.map(\.riti)
+        ritiIndices = items.map { $0.riti }
+        shortcutIndex = nil
         guard !candidates.isEmpty else {
             selectedIndex = 0
             return
@@ -311,11 +321,27 @@ public final class PhoneticComposer {
             selection = plain
         }
         selectedIndex = selection
+        addShortcut(keptSelection: keptSelection)
+    }
+
+    /// The user's shortcut for what was typed, if any, goes first and is selected; what was first
+    /// (in phonetic-first, the plain transliteration) is second. Punctuation typed around the code
+    /// stays around the text (`asw,` → আসসালামু আলাইকুম,).
+    private func addShortcut(keptSelection: Bool) {
+        guard let text = shortcuts.text(for: PickMemory.trim(auxiliary)) else { return }
+        let (before, after) = PickMemory.affixes(candidates[0])
+        candidates.insert(before + text + after, at: 0)
+        ritiIndices.insert(nil, at: 0)
+        if let index = literalIndex { literalIndex = index + 1 }
+        shortcutIndex = 0
+        // After the user moved to another word, punctuation keeps that word.
+        selectedIndex = keptSelection && !keepShortcut ? selectedIndex + 1 : 0
     }
 
     private func clearList() {
         candidates = []
         ritiIndices = []
+        shortcutIndex = nil
         literalIndex = nil
         selectedIndex = 0
     }
@@ -334,6 +360,7 @@ public final class PhoneticComposer {
         auxiliary = ""
         literal = ""
         selectionMoved = false
+        keepShortcut = false
     }
 
     // MARK: Helpers

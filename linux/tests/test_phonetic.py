@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from nukta_bangla import riti  # noqa: E402
 from nukta_bangla.phonetic import (PHONETIC_FIRST, PHONETIC_ONLY, SMART,  # noqa: E402
                                    Key, PhoneticComposer, PhoneticOptions, contains_emoji)
+from nukta_bangla.shortcuts import Shortcuts, dictionary_word  # noqa: E402
 
 requires_riti = unittest.skipUnless(
     riti.available(), "libnukta_riti.so is not built (linux/build_riti.sh)")
@@ -221,6 +222,71 @@ class PhoneticComposerTests(unittest.TestCase):
         rig.composer.update(PhoneticOptions(mode=SMART))
         self.assertFalse(rig.composer.is_composing)
         self.assertEqual(rig.type("sonar␣").doc, "সোনার ")
+
+
+    # MARK: The user's shortcuts (riti-bridge/src/shortcuts.rs)
+
+    SALAM = "আসসালামু আলাইকুম"
+
+    def shortcut_rig(self, **options):
+        """A rig whose data directory has ``asw`` → আসসালামু আলাইকুম."""
+        rig = self.rig(**options)
+        shortcuts = Shortcuts(rig.directory)
+        self.assertEqual(shortcuts.set("asw", self.SALAM), 0)
+        shortcuts.close()
+        return rig
+
+    def test_a_shortcut_comes_first_and_the_plain_word_second(self):
+        plain = self.rig().type("asw").candidates[0]
+        rig = self.shortcut_rig()
+        rig.type("asw")
+        self.assertEqual(rig.candidates[0], self.SALAM)
+        self.assertEqual(rig.candidates[1], plain)
+        self.assertEqual(rig.marked, self.SALAM)
+        self.assertEqual(rig.type("␣").doc, self.SALAM + " ")
+        # 2 types the plain word.
+        self.assertEqual(Rig(directory=rig.directory).type("asw2").doc, plain)
+
+    def test_only_the_whole_code_offers_a_shortcut(self):
+        rig = self.shortcut_rig()
+        rig.type("as")
+        self.assertNotIn(self.SALAM, rig.candidates)
+        rig.type("wa")
+        self.assertNotIn(self.SALAM, rig.candidates)
+        # Any case.
+        self.assertEqual(Rig(directory=rig.directory).type("Asw").candidates[0], self.SALAM)
+
+    def test_a_shortcut_works_in_smart_mode_too(self):
+        rig = self.shortcut_rig(mode=SMART)
+        self.assertEqual(rig.type("asw␣").doc, self.SALAM + " ")
+
+    def test_punctuation_stays_around_a_shortcut(self):
+        rig = self.shortcut_rig()
+        self.assertEqual(rig.type("asw,␣").doc, self.SALAM + ", ")
+        # The plain word, picked before the comma, stays picked.
+        rig = Rig(directory=rig.directory)
+        rig.type("asw↓")
+        plain = rig.candidates[1]
+        self.assertEqual(rig.type(",␣").doc, plain + ", ")
+
+    def test_a_shortcut_added_meanwhile_is_offered_and_not_remembered_as_a_pick(self):
+        rig = self.rig()
+        plain = rig.type("asw").candidates[0]
+        rig.type("⎋")
+        # The shortcuts dialog (another process) adds it while the application is open.
+        shortcuts = Shortcuts(rig.directory)
+        shortcuts.set("asw", self.SALAM)
+        rig.type("asw␣")
+        self.assertEqual(rig.doc, self.SALAM + " ")
+        # Removed: the plain word again, not a remembered pick of the shortcut's text.
+        shortcuts.remove("asw")
+        shortcuts.close()
+        rig.type("asw␣")
+        self.assertEqual(rig.doc, f"{self.SALAM} {plain} ")
+
+    def test_dictionary_words_are_named(self):
+        self.assertEqual(dictionary_word("ami"), "আমি")
+        self.assertIsNone(dictionary_word("tnx"))
 
 
 class EmojiTests(unittest.TestCase):

@@ -15,6 +15,7 @@ import queue
 import threading
 
 from .riti import RitiContext, keycode as riti_keycode
+from .shortcuts import Shortcuts
 
 #: How phonetic typing picks the word that Space commits. The strings are what the settings file
 #: holds, so they match the macOS `TypingMode` raw values.
@@ -232,6 +233,15 @@ class PickMemory:
     def trim(cls, text):
         return text.strip(cls.PUNCTUATION)
 
+    @classmethod
+    def affixes(cls, text):
+        """The punctuation `trim` takes off the front and the back: ``("(", "),")`` for ``(ami),``."""
+        core = cls.trim(text)
+        if not core:
+            return text, ""
+        start = len(text) - len(text.lstrip(cls.PUNCTUATION))
+        return text[:start], text[start + len(core):]
+
     def _save(self):
         if self._writes is None:
             self._writes = queue.SimpleQueue()
@@ -274,12 +284,18 @@ class PhoneticComposer:
 
         self._directory = directory
         self._picks = PickMemory(directory)
+        #: The user's shortcuts (``asw`` → আসসালামু আলাইকুম), from the shared engine in riti-bridge.
+        self._shortcuts = Shortcuts(directory)
         self._riti, self._literal_riti = self._make_contexts(options, directory)
         #: The word when riti gives no list (phonetic-only mode, a lone punctuation mark).
         self._lonely = ""
         #: For each candidate, its index in riti's own list (the order differs after filtering and
-        #: moving the literal up).
+        #: moving the literal up). None for the shortcut, which isn't riti's.
         self._riti_indices = []
+        #: Index in `candidates` of the user's shortcut for what was typed (always the first).
+        self._shortcut_index = None
+        #: The shortcut was selected when a punctuation mark that keeps the selection was typed.
+        self._keep_shortcut = False
         #: Index in `candidates` of the literal transliteration, if it is there.
         self._literal_index = None
         #: The literal transliteration of what was typed, from the literal-only context.
@@ -349,7 +365,9 @@ class PhoneticComposer:
         if not 0 <= index < len(self.candidates):
             return Output(marked=self._marked) if self.is_composing else Output()
         text = self.candidates[index]
-        if self.options.mode == PHONETIC_FIRST and self._literal_index is not None:
+        # A shortcut is the user's own: nothing to remember about it.
+        if (self.options.mode == PHONETIC_FIRST and self._literal_index is not None
+                and index != self._shortcut_index):
             if index == self._literal_index or PickMemory.trim(text) == PickMemory.trim(self._literal):
                 self._picks.forget(self.auxiliary)
             elif not contains_emoji(text):
@@ -366,6 +384,7 @@ class PhoneticComposer:
         """Lets riti go. The engine keeps one composer for its lifetime, so this is for tests."""
         self.discard()
         self._close_contexts()
+        self._shortcuts.close()
 
     # MARK: Keys
 
@@ -392,7 +411,8 @@ class PhoneticComposer:
                           and character in self.SELECTION_KEEPERS)
         if not keep_selection:
             self._selection_moved = False
-        selection = self._riti_indices[self.selected_index] if keep_selection else 0
+        self._keep_shortcut = keep_selection and self._shortcut_index == self.selected_index
+        selection = (self._riti_indices[self.selected_index] or 0) if keep_selection else 0
 
         # riti only reports what was typed with a list; this keeps it for a lonely answer too.
         self.auxiliary += character
@@ -483,6 +503,7 @@ class PhoneticComposer:
 
         self.candidates = [text for _, text in items]
         self._riti_indices = [index for index, _ in items]
+        self._shortcut_index = None
         if not self.candidates:
             self.selected_index = 0
             return
@@ -510,10 +531,29 @@ class PhoneticComposer:
             if plain is not None:
                 selection = plain
         self.selected_index = selection
+        self._add_shortcut(kept_selection)
+
+    def _add_shortcut(self, kept_selection):
+        """The user's shortcut for what was typed, if any, goes first and is selected; what was
+        first (in phonetic-first, the plain transliteration) is second. Punctuation typed around the
+        code stays around the text (``asw,`` → আসসালামু আলাইকুম,)."""
+        text = self._shortcuts.text_for(PickMemory.trim(self.auxiliary))
+        if text is None:
+            return
+        before, after = PickMemory.affixes(self.candidates[0])
+        self.candidates.insert(0, before + text + after)
+        self._riti_indices.insert(0, None)
+        if self._literal_index is not None:
+            self._literal_index += 1
+        self._shortcut_index = 0
+        # After the user moved to another word, punctuation keeps that word.
+        self.selected_index = (self.selected_index + 1
+                               if kept_selection and not self._keep_shortcut else 0)
 
     def _clear_list(self):
         self.candidates = []
         self._riti_indices = []
+        self._shortcut_index = None
         self._literal_index = None
         self.selected_index = 0
 
@@ -531,6 +571,7 @@ class PhoneticComposer:
         self.auxiliary = ""
         self._literal = ""
         self._selection_moved = False
+        self._keep_shortcut = False
 
     def _close_contexts(self):
         self._riti.close()

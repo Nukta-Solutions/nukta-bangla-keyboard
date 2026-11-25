@@ -27,7 +27,7 @@
 //!
 //! ```text
 //! NuktaBangla.exe            start (or, if running, show the bar)
-//! NuktaBangla.exe --startup  start with the splash screen (Windows starting, from the Run key)
+//! NuktaBangla.exe --startup  start in English with the splash screen (Windows starting, from the Run key)
 //! NuktaBangla.exe --quit     close the running copy (the uninstaller does this)
 //! ```
 
@@ -300,7 +300,12 @@ mod app {
             return 1;
         };
 
-        let settings = Settings::new(&win::prepare_data_directory());
+        let mut settings = Settings::new(&win::prepare_data_directory());
+        // Every Windows start is in English (the black EN icon), whatever was on at shutdown. The
+        // layout is kept, so F12 turns on the one the user picked. Silent: no beep at login.
+        if startup && !settings.english() {
+            settings.set_english(true);
+        }
         let app = App {
             window,
             gfx,

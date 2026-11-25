@@ -264,6 +264,20 @@ class EngineTests(unittest.TestCase):
         # A lone ্ (nothing to sit on) still waits.
         self.assertEqual(visible_after("g"), "")
 
+    def test_backspace_after_visible_hasanta(self):
+        # g pressed twice by mistake (ম্‌), then backspace: the ম comes back, and g makes ম্ again.
+        e = Engine()
+        for c in "mgg":
+            out = e.process_character(c)
+        self.assertEqual((out.committed, out.visible), ("", "ম্‌"))
+        self.assertEqual(e.backspace().visible, "ম")
+        self.assertEqual(e.process_character("g").visible, "ম্")
+        self.assertEqual(e.process_character("r").visible, "ম্প")
+        # What is typed after g g is what it always was.
+        for keys, typed in (("mggr", "ম্‌প"), ("mggf", "ম্‌া"), ("mggA", "ম্‌র্"), ("mggQ", "ম্‌ং"),
+                            ("mggc", "ম্‌ে"), ("mgg", "ম্‌")):
+            self.assertEqual(type_keys(keys), typed, keys)
+
     def test_a_shows_at_once(self):
         # অ (Shift+F) is on screen as soon as it is typed; an f still makes it আ.
         e = Engine()

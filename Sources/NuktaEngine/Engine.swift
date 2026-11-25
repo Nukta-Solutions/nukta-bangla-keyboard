@@ -58,6 +58,13 @@ public final class Engine {
             syllable.append(.preKar(k))
         }
 
+        // A visible hasanta (g g) ends the syllable, but it stays in progress until the next key, so
+        // a backspace right after it gives the letter back (ম্‌ → ম, and g then makes ম্ again)
+        // instead of leaving it to the app, which may delete only the invisible ZWNJ.
+        if syllable.tokens.last == .explicitHasanta {
+            commitSyllable()
+        }
+
         // অ waits one key: া makes it আ (F f), anything else leaves it as অ.
         if case .vowel = syllable.tokens.first {
             if key == .kar("\u{09BE}") {
@@ -92,8 +99,7 @@ public final class Engine {
                 // g g → visible hasanta (্ + ZWNJ)
                 syllable.removeLast()
                 if syllable.hasCluster {
-                    syllable.append(.explicitHasanta)
-                    commitSyllable()
+                    syllable.append(.explicitHasanta) // finished by the next key
                 } else {
                     commitSyllable()
                     committed += Syllable.hasantaChar + "\u{200C}"

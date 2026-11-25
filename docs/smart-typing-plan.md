@@ -50,9 +50,10 @@ Dropped on 2026-11-23: grammar and standard-spelling suggestions (প্রম�
 - Codes are 2–12 English letters, no digits (while a word is typed, 1–9 pick from the list); any case.
 - Stored in `shortcuts.json` in the data directory (code → text), apart from what is learned, so wiping the
   learned data keeps them; export/import (6) carries both.
-- Built (2026-11-25): the engine in `riti-bridge/src/shortcuts.rs` (with C functions for macOS and Linux) and
-  the Windows list. Still to do: the Windows settings (preview in `windows/design/settings-preview.html`),
-  then macOS and Linux.
+- Built (2026-11-25): the engine in `riti-bridge/src/shortcuts.rs` (with C functions for macOS and Linux), the
+  Windows list, and the Windows settings: a card with সাজান…, which opens the shortcuts dialog
+  (`NuktaBanglaSettings.exe --shortcuts`, `windows/src/bin/settings/shortcuts.rs`). The code box is marked
+  English-only and the text service leaves its keys alone (`win::mark_latin_only`). Still to do: macOS and Linux.
 
 ### 6. Control over learned data
 - Settings show what has been learned: the number of learned words, word pairs, picks and shortcuts.

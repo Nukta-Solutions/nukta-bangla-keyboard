@@ -64,6 +64,8 @@ Pop-Location
 $Version = (Select-String -Path 'Cargo.toml' -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
 $iscc = Get-Command iscc -ErrorAction SilentlyContinue
 $isccPath = if ($iscc) { $iscc.Source } else { Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe' }
+# Installed for this user only, when it isn't on PATH.
+if (-not (Test-Path $isccPath)) { $isccPath = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe' }
 if (-not (Test-Path $isccPath)) { throw 'Inno Setup 6 not found: install it from https://jrsoftware.org/isinfo.php' }
 Invoke-Checked 'Inno Setup' { & $isccPath "/DAppVersion=$Version" 'installer\nukta-bangla.iss' }
 Write-Host "Built $(Join-Path $Out "NuktaBangla-Setup.exe") (v$Version)"

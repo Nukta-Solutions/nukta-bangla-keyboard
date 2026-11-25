@@ -28,6 +28,13 @@ pub struct Output {
 pub struct Engine {
     syllable: Syllable,
     committed: String,
+    /// The letter just before the cursor in the app, when the caller could read it.
+    before: Option<char>,
+}
+
+/// ক … হ, ড় ঢ় য়: a letter a ্ can join.
+fn is_consonant(c: char) -> bool {
+    matches!(c, '\u{0995}'..='\u{09B9}' | '\u{09DC}' | '\u{09DD}' | '\u{09DF}')
 }
 
 impl Engine {
@@ -41,6 +48,13 @@ impl Engine {
 
     pub fn display(&self) -> String {
         self.syllable.rendered()
+    }
+
+    /// Tells the engine the letter just before the cursor in the app (None when unknown), so a ্
+    /// typed after a finished letter shows (ম, then g → ম্) instead of waiting for the next key.
+    /// Only matters while nothing is being composed: the engine knows what it has typed itself.
+    pub fn set_text_before(&mut self, before: Option<char>) {
+        self.before = before;
     }
 
     /// None when the character is not a Bijoy key (the caller should commit and pass it through).
@@ -61,6 +75,13 @@ impl Engine {
             }
             self.commit_syllable();
             self.syllable.push(Token::PreKar(k));
+        }
+
+        // A visible hasanta (g g) ends the syllable, but it stays in progress until the next key, so
+        // a backspace right after it gives the letter back (ম্‌ → ম, and g then makes ম্ again)
+        // instead of leaving it to the app, which may delete only the invisible ZWNJ.
+        if self.syllable.tokens.last() == Some(&Token::ExplicitHasanta) {
+            self.commit_syllable();
         }
 
         // অ waits one key: া makes it আ (F f), anything else leaves it as অ.
@@ -100,8 +121,7 @@ impl Engine {
                     // g g → visible hasanta (্ + ZWNJ)
                     self.syllable.pop();
                     if self.syllable.has_cluster() {
-                        self.syllable.push(Token::ExplicitHasanta);
-                        self.commit_syllable();
+                        self.syllable.push(Token::ExplicitHasanta); // finished by the next key
                     } else {
                         self.commit_syllable();
                         self.committed.push_str(HASANTA);
@@ -197,11 +217,16 @@ impl Engine {
     }
 
     fn output(&mut self) -> Output {
-        Output {
-            committed: std::mem::take(&mut self.committed),
-            display: self.syllable.rendered(),
-            visible: self.syllable.visible_rendered(),
-        }
+        // A ্ with no consonant of its own waits for the next key (g f → আ, g d → ই), unless
+        // it sits on a finished letter: what this key just finished, else what was in the app.
+        let lone_link = self.syllable.tokens == [Token::Hasanta];
+        let before = self.committed.chars().last().or(self.before);
+        let visible = if lone_link && before.is_some_and(is_consonant) {
+            HASANTA.to_owned()
+        } else {
+            self.syllable.visible_rendered()
+        };
+        Output { committed: std::mem::take(&mut self.committed), display: self.syllable.rendered(), visible }
     }
 
     fn commit_syllable(&mut self) {

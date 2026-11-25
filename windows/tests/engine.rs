@@ -216,12 +216,30 @@ fn hasanta_shows_at_once() {
     // রেফ and a phala after it: র্ক্, ম্য.
     assert_eq!(visible_after("jAg"), "র্ক্");
     assert_eq!(visible_after("mgZ"), "ম্য");
-    // g g: the visible hasanta, finished.
+    // g g: the visible hasanta, finished by the next key.
     let mut e = Engine::new();
     e.process_character('m');
     e.process_character('g');
     let out = e.process_character('g').unwrap();
-    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("ম্\u{200C}", ""));
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("", "ম্\u{200C}"));
+    let out = e.process_character('r').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("ম্\u{200C}", "প"));
+    // g pressed twice by mistake, then backspace: the ম comes back, and g makes ম্ again (ম্প).
+    let mut e = Engine::new();
+    e.process_character('m');
+    e.process_character('g');
+    e.process_character('g');
+    assert_eq!(e.backspace().unwrap().visible, "ম");
+    assert_eq!(e.process_character('g').unwrap().visible, "ম্");
+    assert_eq!(e.process_character('r').unwrap().visible, "ম্প");
+    // What is typed after g g is what it always was.
+    for (keys, typed) in [("mggr", "ম্\u{200C}প"), ("mggf", "ম্\u{200C}া"), ("mggX", "ম্\u{200C}ৗ"), ("mggA", "ম্\u{200C}র্"),
+                          ("mggQ", "ম্\u{200C}ং"), ("mggc", "ম্\u{200C}ে"), ("mggg", "ম্\u{200C}্"), ("mgg", "ম্\u{200C}")] {
+        let mut e = Engine::new();
+        let mut doc: String = keys.chars().map(|c| e.process_character(c).unwrap().committed).collect();
+        doc.push_str(&e.commit().committed);
+        assert_eq!(doc, typed, "{keys}");
+    }
     // g + kar still makes a full vowel: ক্ on screen, then কই.
     let mut e = Engine::new();
     e.process_character('j');
@@ -246,6 +264,46 @@ fn hasanta_shows_at_once() {
     assert_eq!(typed, "রক্তে");
     // A lone ্ (nothing to sit on) still waits.
     assert_eq!(visible_after("g"), "");
+}
+
+/// A ্ typed after a finished letter shows on it at once when the letter is a consonant (ম, then
+/// g → ম্); after anything else (a space, a kar) it waits, so g f → আ and g d → ই show no ্ first.
+#[test]
+fn lone_hasanta_shows_after_a_finished_consonant() {
+    fn after(before: Option<char>, keys: &str) -> Vec<(String, String)> {
+        let mut e = Engine::new();
+        keys.chars()
+            .map(|c| {
+                e.set_text_before(before);
+                let out = e.process_character(c).unwrap();
+                (out.committed, out.visible)
+            })
+            .collect()
+    }
+    // ম in the app, then g r: ্ at once, and ম + ্ + প is typed (ম্প).
+    let steps = after(Some('ম'), "gr");
+    assert_eq!(steps[0], (String::new(), "\u{09CD}".into()));
+    assert_eq!(steps[1], ("\u{09CD}".into(), "প".into()));
+    // g + kar still makes the full vowel: ম্ for a moment, then মই.
+    assert_eq!(after(Some('ম'), "gd")[1], ("ই".into(), String::new()));
+    // য় and ড় take it too.
+    assert_eq!(after(Some('\u{09DF}'), "g")[0].1, "\u{09CD}");
+    // After a space, a kar, or nothing known, it waits as before.
+    for before in [Some(' '), Some('া'), Some('্'), None] {
+        assert_eq!(after(before, "g")[0].1, "", "{before:?}");
+    }
+    // What this key itself finished counts, not what was in the app: কা then g waits.
+    let mut e = Engine::new();
+    e.process_character('j');
+    e.process_character('f');
+    e.set_text_before(Some('ম'));
+    let out = e.process_character('g').unwrap();
+    assert_eq!((out.committed.as_str(), out.visible.as_str()), ("কা", ""));
+    // Backspace takes the ্ off again.
+    let mut e = Engine::new();
+    e.set_text_before(Some('ম'));
+    e.process_character('g');
+    assert_eq!(e.backspace().unwrap().visible, "");
 }
 
 /// অ (Shift+F) is on screen as soon as it is typed, not only after the next key; an f still

@@ -345,13 +345,28 @@ final class EngineTests: XCTestCase {
             XCTAssertEqual(visibleAfter(keys)?.visible, shown, keys)
             XCTAssertEqual(visibleAfter(keys)?.provisional, false, keys)
         }
-        // g g: the visible hasanta, finished.
+        // g g: the visible hasanta, finished by the next key.
         var e = Engine()
         _ = e.process(character: "m")
         _ = e.process(character: "g")
         var out = e.process(character: "g")!
+        XCTAssertEqual(out.committed, "")
+        XCTAssertEqual(out.visible, "ম্\u{200C}")
+        out = e.process(character: "r")!
         XCTAssertEqual(out.committed, "ম্\u{200C}")
-        XCTAssertEqual(out.visible, "")
+        XCTAssertEqual(out.visible, "প")
+        // g pressed twice by mistake, then backspace: the ম comes back, and g makes ম্ again (ম্প).
+        e = Engine()
+        for ch in "mgg" { _ = e.process(character: ch) }
+        XCTAssertEqual(e.backspace()?.visible, "ম")
+        XCTAssertEqual(e.process(character: "g")?.visible, "ম্")
+        XCTAssertEqual(e.process(character: "r")?.visible, "ম্প")
+        // What is typed after g g is what it always was.
+        for (keys, typed) in [("mggr", "ম্\u{200C}প"), ("mggf", "ম্\u{200C}া"), ("mggA", "ম্\u{200C}র্"),
+                              ("mggQ", "ম্\u{200C}ং"), ("mggc", "ম্\u{200C}ে"), ("mgg", "ম্\u{200C}")] {
+            XCTAssertEqual(type(keys), typed, keys)
+            XCTAssertEqual(typeWithEdits(keys).doc, typed, keys)
+        }
         // g + kar still makes a full vowel: ক্ on screen, then কই.
         e = Engine()
         _ = e.process(character: "j")

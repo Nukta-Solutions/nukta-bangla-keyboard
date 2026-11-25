@@ -23,6 +23,7 @@
 //! NuktaBanglaSettings.exe --about    the about box
 //! NuktaBanglaSettings.exe --update   the update dialog, for what update.json last found
 //! NuktaBanglaSettings.exe --update-background   the same, without taking the keyboard
+//! NuktaBanglaSettings.exe --shortcuts          নিজের শর্টকাট: the user's shortcuts (app/shortcuts.rs)
 //! NuktaBanglaSettings.exe --enable   add নুকতা বাংলা to this user's keyboards
 //! NuktaBanglaSettings.exe --show-bar show the top bar from now on (after every install)
 //! NuktaBanglaSettings.exe --first-install   English, ফোনেটিক for F12, ফোনেটিক আগে typing
@@ -43,6 +44,10 @@ fn main() {
 
 #[cfg(windows)]
 mod app {
+    // Inline modules look in src/bin/app/: the dialog lives beside this file instead.
+    #[path = "../settings/shortcuts.rs"]
+    mod shortcuts;
+
     use std::cell::RefCell;
     use std::time::{Duration, Instant};
 
@@ -51,19 +56,24 @@ mod app {
     use nukta_bangla::settings::{Layout, PopupDirection, PopupPosition, Settings};
     use nukta_bangla::update::{self, Release};
     use nukta_bangla::win;
+    use nukta_riti::shortcuts::Shortcuts;
     use windows::core::{w, BOOL, PCWSTR};
-    use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
+    use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
     use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWINDOWATTRIBUTE};
-    use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT};
+    use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, InvalidateRect, ScreenToClient, HDC, PAINTSTRUCT};
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::HiDpi::{GetDpiForSystem, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE};
-    use windows::Win32::UI::Input::KeyboardAndMouse::{TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT, VK_ESCAPE};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT, VK_DOWN, VK_END, VK_ESCAPE, VK_HOME, VK_NEXT,
+        VK_PRIOR, VK_UP,
+    };
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::*;
 
     const SETTINGS_CLASS: PCWSTR = w!("NuktaBanglaSettings");
     const ABOUT_CLASS: PCWSTR = w!("NuktaBanglaAbout");
     const UPDATE_CLASS: PCWSTR = w!("NuktaBanglaUpdate");
+    const SHORTCUTS_CLASS: PCWSTR = w!("NuktaBanglaShortcuts");
     /// Re-reads the settings file now and then: the layout can change from the top bar meanwhile.
     const WATCH_TIMER: usize = 1;
     /// The update dialog's buttons start answering a second after it opens.
@@ -81,6 +91,13 @@ mod app {
     // MARK: The design (settings-preview.html), in DIPs.
 
     const SETTINGS_WIDTH: f32 = 860.0;
+    /// The settings window is at most this tall; the rest scrolls.
+    const SETTINGS_MAX_HEIGHT: f32 = 640.0;
+    /// One wheel notch.
+    const WHEEL_STEP: f32 = 64.0;
+    /// The scrollbar: its distance from the window's edges, and its width.
+    const BAR_INSET: f32 = 6.0;
+    const BAR_WIDTH: f32 = 6.0;
     const ABOUT_WIDTH: f32 = 400.0;
     const UPDATE_WIDTH: f32 = 420.0;
     const PAD: f32 = 24.0;
@@ -119,6 +136,10 @@ mod app {
             "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", "M8 16H3v5",
         ],
     };
+    const ZAP: Icon = Icon {
+        view: 24.0,
+        paths: &["M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"],
+    };
     const COMMAND: Icon = Icon {
         view: 24.0,
         paths: &["M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"],
@@ -126,9 +147,9 @@ mod app {
 
     const MODES: [(TypingMode, &str, &str); 3] = [
         (TypingMode::PhoneticFirst, "ফোনেটিক আগে",
-         "যেমন বানান লিখবেন ঠিক তেমন বাংলা বসবে। তালিকা থেকে অন্য শব্দ বেছে নিলে পরের বার সেটাই আগে আসবে।"),
-        (TypingMode::Smart, "স্মার্ট", "অভিধান আর অটোকারেক্ট সবচেয়ে মানানসই শব্দ বেছে দেবে (sonar → সোনার)।"),
-        (TypingMode::PhoneticOnly, "শুধু ফোনেটিক", "সাজেশন তালিকা ছাড়া, অক্ষর ধরে ধরে লেখা।"),
+         "যেমন লিখবেন তেমন বসবে। তালিকা থেকে বাছা শব্দ পরের বার আগে আসবে।"),
+        (TypingMode::Smart, "স্মার্ট", "অভিধান থেকে মানানসই শব্দ বসবে (sonar → সোনার)।"),
+        (TypingMode::PhoneticOnly, "শুধু ফোনেটিক", "তালিকা ছাড়া, অক্ষর ধরে ধরে।"),
     ];
 
     /// What a click on a part of the settings window does.
@@ -145,6 +166,12 @@ mod app {
         Direction(PopupDirection),
         AutoUpdate,
         CheckNow,
+        /// সাজান…: opens the shortcuts dialog.
+        OpenShortcuts,
+        // The shortcuts dialog: its button, and a row or its × (by index in the list).
+        SaveShortcut,
+        EditShortcut(usize),
+        RemoveShortcut(usize),
         // The update dialog.
         Download,
         Later,
@@ -157,6 +184,7 @@ mod app {
         Settings,
         About,
         Update,
+        Shortcuts,
     }
 
     /// Where the update dialog's ডাউনলোড is.
@@ -209,12 +237,23 @@ mod app {
         hits: Vec<(Rect, Action)>,
         /// The content height the window was last sized to, in DIPs.
         height: f32,
+        /// The window's client height, in DIPs: the content's, up to the screen's limit.
+        view: f32,
+        /// How far the content is scrolled up, in DIPs.
+        scroll: f32,
+        /// While the scrollbar's thumb is dragged: the pointer's y and the scroll when it started.
+        drag: Option<(f32, f32)>,
         /// The update dialog's release.
         release: Option<Release>,
         check: Check,
         /// When the window opened: the update dialog's buttons wait for `GUARD`.
         opened: Instant,
         download: Download,
+        /// The user's shortcuts: their number on the settings card, the list in their dialog.
+        shortcuts: Shortcuts,
+        shortcut_count: usize,
+        /// The shortcuts dialog's edit controls and state.
+        dialog: Option<shortcuts::Dialog>,
     }
 
     thread_local! {
@@ -254,6 +293,7 @@ mod app {
             "--about" => run_window(Screen::About, true),
             "--update" => run_window(Screen::Update, true),
             "--update-background" => run_window(Screen::Update, false),
+            "--shortcuts" => run_window(Screen::Shortcuts, true),
             _ => run_window(Screen::Settings, true),
         }
     }
@@ -271,6 +311,7 @@ mod app {
             Screen::Settings => (SETTINGS_CLASS, "নুকতা বাংলা — সেটিংস", SETTINGS_WIDTH),
             Screen::About => (ABOUT_CLASS, "নুকতা বাংলা সম্পর্কে", ABOUT_WIDTH),
             Screen::Update => (UPDATE_CLASS, "নুকতা বাংলা আপডেট", UPDATE_WIDTH),
+            Screen::Shortcuts => (SHORTCUTS_CLASS, "নুকতা বাংলা — নিজের শর্টকাট", shortcuts::WIDTH),
         };
         unsafe {
             // One window of each: a second start brings the first forward.
@@ -312,6 +353,8 @@ mod app {
             let style = match screen {
                 Screen::Settings => WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
                 Screen::About | Screen::Update => WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+                // Its text boxes are child windows: drawing stays off them.
+                Screen::Shortcuts => WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
             };
             let Ok(window) = CreateWindowExW(
                 WINDOW_EX_STYLE(0), class_name, PCWSTR(title.as_ptr()), style,
@@ -322,17 +365,25 @@ mod app {
             dark_title_bar(window);
 
             let dpi = GetDpiForSystem().max(96) as f32;
-            let settings = Settings::new(&win::prepare_data_directory());
+            let directory = win::prepare_data_directory();
+            let settings = Settings::new(&directory);
+            let mut shortcuts = Shortcuts::new(&directory);
+            let list: Vec<_> = shortcuts.all().into_iter().collect();
+            let shortcut_count = list.len();
+            let dialog = (screen == Screen::Shortcuts).then(|| shortcuts::Dialog::new(window, dpi, list));
             APP.with(|app| {
                 *app.borrow_mut() = Some(App {
                     window, screen, gfx, settings, dpi, hover: None, hits: Vec::new(), height: 0.0,
+                    view: 0.0, scroll: 0.0, drag: None,
                     release, check: Check::Idle, opened: Instant::now(), download: Download::Idle,
+                    shortcuts, shortcut_count, dialog,
                 })
             });
 
-            // Sized around the content, centred on the screen.
-            let height = content_height();
-            resize(window, width, height, dpi, true);
+            // Sized around the content (up to the screen's limit), centred on the screen.
+            let view = fit_view(screen, content_height(), dpi);
+            resize(window, width, view, dpi, true);
+            shortcuts::place();
             if activate {
                 let _ = ShowWindow(window, SW_SHOW);
             } else {
@@ -353,10 +404,15 @@ mod app {
                     SetTimer(Some(window), GUARD_TIMER, GUARD.as_millis() as u32, None);
                 }
                 Screen::About => {}
+                Screen::Shortcuts => shortcuts::focus_code(),
             }
 
             let mut message = MSG::default();
             while GetMessageW(&mut message, None, 0, 0).as_bool() {
+                // The shortcuts dialog: Tab between its boxes, Enter saves, Esc closes.
+                if screen == Screen::Shortcuts && IsDialogMessageW(window, &message).as_bool() {
+                    continue;
+                }
                 let _ = TranslateMessage(&message);
                 DispatchMessageW(&message);
             }
@@ -398,11 +454,12 @@ mod app {
     /// The content's height now, from a layout pass without drawing.
     fn content_height() -> f32 {
         with_app(|app| {
-            let mut ctx = Ctx { canvas: None, gfx: &app.gfx, hover: None, hits: Vec::new() };
+            let mut ctx = Ctx { canvas: None, gfx: &app.gfx, hover: None, hits: Vec::new(), dy: 0.0 };
             let height = match app.screen {
-                Screen::Settings => draw_settings(&mut ctx, &app.settings, app.check),
+                Screen::Settings => draw_settings(&mut ctx, &app.settings, app.check, app.shortcut_count),
                 Screen::About => draw_about(&mut ctx, app.check),
                 Screen::Update => draw_update(&mut ctx, app.release.as_ref(), true, app.download),
+                Screen::Shortcuts => app.dialog.as_ref().map_or(400.0, |d| shortcuts::draw(&mut ctx, d)),
             };
             app.height = height;
             height
@@ -410,21 +467,164 @@ mod app {
         .unwrap_or(400.0)
     }
 
+    fn screen_width(screen: Screen) -> f32 {
+        match screen {
+            Screen::Settings => SETTINGS_WIDTH,
+            Screen::About => ABOUT_WIDTH,
+            Screen::Update => UPDATE_WIDTH,
+            Screen::Shortcuts => shortcuts::WIDTH,
+        }
+    }
+
+    /// The client height for `content` DIPs of content: all of it if it fits, else what the screen
+    /// (and for settings, `SETTINGS_MAX_HEIGHT`) allows, with the rest scrolling. Kept in `App`.
+    fn fit_view(screen: Screen, content: f32, dpi: f32) -> f32 {
+        let mut work = RECT::default();
+        let work_height = unsafe {
+            SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work as *mut RECT as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0))
+        }
+        .ok()
+        .map(|_| (work.bottom - work.top) as f32 * 96.0 / dpi)
+        .unwrap_or(720.0);
+        // Room for the title bar and frame.
+        let mut limit = (work_height - 60.0).max(240.0);
+        if matches!(screen, Screen::Settings | Screen::Shortcuts) {
+            limit = limit.min(SETTINGS_MAX_HEIGHT);
+        }
+        let view = content.min(limit);
+        with_app(|app| {
+            app.view = view;
+            app.scroll = app.scroll.clamp(0.0, (content - view).max(0.0));
+        });
+        view
+    }
+
     /// After a change: the window follows the content's height (বিজয় ⇄ ফোনেটিক), and redraws.
     fn refresh() {
         let Some((window, old_height, dpi, screen)) = with_app(|app| (app.window, app.height, app.dpi, app.screen)) else { return };
         let height = content_height();
         if (height - old_height).abs() > 0.5 {
-            let width = match screen {
-                Screen::Settings => SETTINGS_WIDTH,
-                Screen::About => ABOUT_WIDTH,
-                Screen::Update => UPDATE_WIDTH,
-            };
-            resize(window, width, height, dpi, false);
+            let old_view = with_app(|app| app.view).unwrap_or(0.0);
+            let view = fit_view(screen, height, dpi);
+            if (view - old_view).abs() > 0.5 {
+                resize(window, screen_width(screen), view, dpi, false);
+            }
         }
+        shortcuts::place();
         unsafe {
             let _ = InvalidateRect(Some(window), None, false);
         }
+    }
+
+    // MARK: Scrolling
+
+    fn max_scroll(app: &App) -> f32 {
+        (app.height - app.view).max(0.0)
+    }
+
+    /// The scrollbar's thumb, in window DIPs; None when everything fits.
+    fn thumb(app: &App) -> Option<Rect> {
+        let max = max_scroll(app);
+        if max <= 0.0 {
+            return None;
+        }
+        let track = app.view - 2.0 * BAR_INSET;
+        let height = (track * app.view / app.height).max(40.0).min(track);
+        let top = BAR_INSET + (track - height) * app.scroll / max;
+        Some(Rect::new(screen_width(app.screen) - BAR_INSET - BAR_WIDTH, top, BAR_WIDTH, height))
+    }
+
+    fn scroll_to(target: f32) {
+        let window = with_app(|app| {
+            let scroll = target.clamp(0.0, max_scroll(app));
+            let moved = (scroll - app.scroll).abs() > 0.01;
+            app.scroll = scroll;
+            moved.then_some(app.window)
+        })
+        .flatten();
+        if let Some(window) = window {
+            shortcuts::place();
+            unsafe {
+                let _ = InvalidateRect(Some(window), None, false);
+            }
+            rehover(window);
+        }
+    }
+
+    fn scroll_by(delta: f32) {
+        if let Some(scroll) = with_app(|app| app.scroll) {
+            scroll_to(scroll + delta);
+        }
+    }
+
+    /// After scrolling, what is under the pointer has changed.
+    fn rehover(window: HWND) {
+        let mut point = POINT::default();
+        let mut client = RECT::default();
+        unsafe {
+            if GetCursorPos(&mut point).is_err() || !ScreenToClient(window, &mut point).as_bool() {
+                return;
+            }
+            let _ = GetClientRect(window, &mut client);
+        }
+        let inside = point.x >= 0 && point.y >= 0 && point.x < client.right && point.y < client.bottom;
+        set_hover(if inside { action_at_point(point.x as f32, point.y as f32) } else { None });
+    }
+
+    /// The pointer's position from a mouse message, in window DIPs.
+    fn point_dip(lparam: LPARAM) -> (f32, f32) {
+        let x = (lparam.0 & 0xFFFF) as i16 as f32;
+        let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as f32;
+        let dpi = with_app(|app| app.dpi).unwrap_or(96.0);
+        (x * 96.0 / dpi, y * 96.0 / dpi)
+    }
+
+    /// A press on the scrollbar strip: the thumb starts a drag, the track pages. True if it was there.
+    fn press_bar(window: HWND, lparam: LPARAM) -> bool {
+        let (x, y) = point_dip(lparam);
+        let Some((thumb, scroll, view)) = with_app(|app| thumb(app).map(|t| (t, app.scroll, app.view))).flatten() else { return false };
+        if x < thumb.left - 6.0 {
+            return false;
+        }
+        if y >= thumb.top && y <= thumb.top + thumb.height() {
+            with_app(|app| app.drag = Some((y, scroll)));
+            unsafe {
+                SetCapture(window);
+                let _ = InvalidateRect(Some(window), None, false);
+            }
+        } else {
+            let page = view * 0.9;
+            scroll_by(if y < thumb.top { -page } else { page });
+        }
+        true
+    }
+
+    /// The thumb follows the pointer while it is dragged. True while dragging.
+    fn drag_bar(lparam: LPARAM) -> bool {
+        let (_, y) = point_dip(lparam);
+        let Some(target) = with_app(|app| {
+            let (start_y, start_scroll) = app.drag?;
+            let thumb = thumb(app)?;
+            let travel = app.view - 2.0 * BAR_INSET - thumb.height();
+            Some(start_scroll + (y - start_y) * max_scroll(app) / travel.max(1.0))
+        })
+        .flatten() else {
+            return false;
+        };
+        scroll_to(target);
+        true
+    }
+
+    /// Ends a drag of the thumb. True if one was going on.
+    fn release_bar(window: HWND) -> bool {
+        let dragging = with_app(|app| app.drag.take().is_some()).unwrap_or(false);
+        if dragging {
+            unsafe {
+                let _ = ReleaseCapture();
+                let _ = InvalidateRect(Some(window), None, false);
+            }
+        }
+        dragging
     }
 
     // MARK: Drawing, and where the clicks go
@@ -435,36 +635,56 @@ mod app {
         gfx: &'a Gfx,
         hover: Option<Action>,
         hits: Vec<(Rect, Action)>,
+        /// How far the content is scrolled up: drawing moves up by it; the clickable parts stay in
+        /// content coordinates.
+        dy: f32,
     }
 
     impl Ctx<'_, '_> {
+        /// Where a content rectangle is drawn, after scrolling.
+        fn at(&self, rect: Rect) -> Rect {
+            Rect::new(rect.left, rect.top - self.dy, rect.width(), rect.height())
+        }
+
+        fn circle(&self, x: f32, y: f32, radius: f32, color: Color, outline: f32) {
+            if let Some(c) = self.canvas {
+                c.circle(x, y - self.dy, radius, color, outline);
+            }
+        }
+
+        fn logo(&self, x: f32, y: f32, width: f32) {
+            if let Some(c) = self.canvas {
+                c.logo(x, y - self.dy, width);
+            }
+        }
+
         fn fill(&self, rect: Rect, radius: f32, color: Color) {
             if let Some(c) = self.canvas {
-                c.fill_round(rect, radius, color);
+                c.fill_round(self.at(rect), radius, color);
             }
         }
 
         fn brand(&self, rect: Rect, radius: f32) {
             if let Some(c) = self.canvas {
-                c.fill_round_brand(rect, radius);
+                c.fill_round_brand(self.at(rect), radius);
             }
         }
 
         fn outline(&self, rect: Rect, radius: f32, color: Color) {
             if let Some(c) = self.canvas {
-                c.stroke_round(rect, radius, color);
+                c.stroke_round(self.at(rect), radius, color);
             }
         }
 
         fn text(&self, text: &str, rect: Rect, style: Style, color: Color) {
             if let Some(c) = self.canvas {
-                c.text(text, rect, style, color);
+                c.text(text, self.at(rect), style, color);
             }
         }
 
         fn icon(&self, icon: &Icon, x: f32, y: f32, size: f32, color: Color) {
             if let Some(c) = self.canvas {
-                c.icon_stroke(icon, x, y, size, color, 1.5 * size / 24.0);
+                c.icon_stroke(icon, x, y - self.dy, size, color, 1.5 * size / 24.0);
             }
         }
 
@@ -545,9 +765,7 @@ mod app {
                 self.fill(rect, 11.0, TOGGLE_OFF);
             }
             let knob_x = if on { x + 29.0 } else { x + 11.0 };
-            if let Some(c) = self.canvas {
-                c.circle(knob_x, y + 11.0, 8.0, WHITE, 0.0);
-            }
+            self.circle(knob_x, y + 11.0, 8.0, WHITE, 0.0);
         }
 
         /// A key cap; returns its width.
@@ -563,14 +781,12 @@ mod app {
         }
     }
 
-    fn draw_settings(ctx: &mut Ctx, s: &Settings, check: Check) -> f32 {
+    fn draw_settings(ctx: &mut Ctx, s: &Settings, check: Check, shortcut_count: usize) -> f32 {
         let phonetic = s.layout() == Layout::Phonetic;
         let mut y = 22.0;
 
         // The head: logo, name, version.
-        if let Some(c) = ctx.canvas {
-            c.logo(PAD, y, 49.0);
-        }
+        ctx.logo(PAD, y, 49.0);
         ctx.text("নুকতা বাংলা", Rect::new(PAD + 63.0, y - 4.0, 400.0, 30.0), Style::new(21.0).weight(700), INK);
         ctx.text(&format!("সেটিংস · সংস্করণ {}", bangla_version()), Rect::new(PAD + 63.0, y + 24.0, 400.0, 18.0), Style::new(13.0), DIM);
         y += 37.0 + 20.0;
@@ -586,6 +802,7 @@ mod app {
             left_y = typing_card(ctx, s, PAD, left_y + GAP, column);
             let right = PAD + column + GAP;
             right_y = suggestions_card(ctx, s, right, y, column);
+            right_y = own_shortcuts_card(ctx, s, shortcut_count, right, right_y + GAP, column);
             right_y = shortcuts_card(ctx, right, right_y + GAP, column);
         }
         left_y = update_card(ctx, s, check, PAD, left_y + GAP, left_width);
@@ -603,7 +820,7 @@ mod app {
 
     /// Draws a card around `content`: a measuring pass first finds its height.
     fn with_card(ctx: &mut Ctx, x: f32, y: f32, width: f32, content: impl Fn(&mut Ctx) -> f32) -> f32 {
-        let mut measure = Ctx { canvas: None, gfx: ctx.gfx, hover: None, hits: Vec::new() };
+        let mut measure = Ctx { canvas: None, gfx: ctx.gfx, hover: None, hits: Vec::new(), dy: ctx.dy };
         let bottom = content(&mut measure) + CARD_PAD;
         card(ctx, x, y, width, bottom - y);
         content(ctx);
@@ -625,7 +842,7 @@ mod app {
                 ],
             );
             y += 54.0 + 10.0;
-            let hint = "F12 চাপলে বা টপ বারের নু লোগোতে ক্লিক করলে বাংলা চালু বা বন্ধ হয়।";
+            let hint = "বাংলা চালু/বন্ধ: F12, বা টপ বারের নু লোগোতে ক্লিক।";
             let style = Style::new(12.5).wrap();
             let height = ctx.height(hint, style, inner_width);
             ctx.text(hint, Rect::new(inner, y, inner_width, height), style, DIM);
@@ -633,7 +850,7 @@ mod app {
             ctx.fill(Rect::new(inner, y, inner_width, 1.0), 0.0, BORDER);
             y += 10.0;
             ctx.text("টগল সাউন্ড", Rect::new(inner, y, inner_width - 56.0, 22.0), Style::new(14.0), INK);
-            ctx.text("বাংলা চালু বা বন্ধ করার সময় ছোট একটা শব্দ", Rect::new(inner, y + 22.0, inner_width - 56.0, 20.0), Style::new(12.5), DIM);
+            ctx.text("চালু/বন্ধ করলে ছোট একটা শব্দ", Rect::new(inner, y + 22.0, inner_width - 56.0, 20.0), Style::new(12.5), DIM);
             ctx.toggle(inner + inner_width - 40.0, y + 10.0, sound, Action::ToggleSound);
             y + 42.0
         })
@@ -657,12 +874,10 @@ mod app {
                 ctx.fill(rect, 8.0, if on { MODE_ON } else if hovered { BOX_HOVER } else { BOX });
                 ctx.outline(rect, 8.0, if on { ORANGE } else { BORDER });
                 // The radio button.
-                if let Some(c) = ctx.canvas {
-                    let (cx, cy) = (inner + 14.0 + 8.0, y + 12.0 + 11.0);
-                    c.circle(cx, cy, 7.25, if on { ORANGE } else { FAINT }, 1.5);
-                    if on {
-                        c.circle(cx, cy, 4.0, ORANGE, 0.0);
-                    }
+                let (cx, cy) = (inner + 14.0 + 8.0, y + 12.0 + 11.0);
+                ctx.circle(cx, cy, 7.25, if on { ORANGE } else { FAINT }, 1.5);
+                if on {
+                    ctx.circle(cx, cy, 4.0, ORANGE, 0.0);
                 }
                 let title_style = Style::new(14.5).weight(600);
                 ctx.text(title, Rect::new(text_left, y + 10.0, text_width, 24.0), title_style, INK);
@@ -680,7 +895,7 @@ mod app {
             y += 13.0;
             let seg_width = 190.0;
             let label_width = inner_width - seg_width - 16.0;
-            let detail = "কোলন বেছে নিলেও বিসর্গ-ওয়ালা শব্দ তালিকায় পাবেন (dukho → দুঃখ)।";
+            let detail = "কোলন বাছলেও তালিকায় দুঃখ (dukho) পাবেন।";
             let detail_style = Style::new(12.5).wrap();
             let detail_height = ctx.height(detail, detail_style, label_width);
             ctx.text("কোলন (:) চাপলে", Rect::new(inner, y, label_width, 22.0), Style::new(14.0), INK);
@@ -698,9 +913,9 @@ mod app {
         // Phonetic-only has no list: these don't apply to it.
         let enabled = s.typing_mode() != TypingMode::PhoneticOnly;
         let toggles = [
-            ("অটোকারেক্ট", "চেনা ভুল বানান ঠিক করে দেখাও", s.autocorrect(), Action::Autocorrect),
+            ("অটোকারেক্ট", "চেনা ভুল বানান ঠিক করে", s.autocorrect(), Action::Autocorrect),
             ("ইমোজি", "হাসি → 😄", s.emoji(), Action::Emoji),
-            ("ইংরেজি শব্দ", "টাইপ করা ইংরেজি শব্দটিও তালিকায় রাখো", s.english_word(), Action::EnglishWord),
+            ("ইংরেজি শব্দ", "ইংরেজি শব্দটিও তালিকায় থাকে", s.english_word(), Action::EnglishWord),
         ];
         let position = s.popup_position();
         let direction = s.popup_direction();
@@ -749,24 +964,55 @@ mod app {
         bottom
     }
 
+    /// নিজের শর্টকাট: how many, and সাজান…, which opens their dialog.
+    fn own_shortcuts_card(ctx: &mut Ctx, s: &Settings, count: usize, x: f32, y: f32, width: f32) -> f32 {
+        // Phonetic-only has no list, so no shortcuts either.
+        let enabled = s.typing_mode() != TypingMode::PhoneticOnly;
+        let how_many = if count == 0 {
+            "এখনো কোনো শর্টকাট নেই।".to_owned()
+        } else {
+            format!("{}টা শর্টকাট আছে।", update::bangla_digits(&count.to_string()))
+        };
+        let summary = format!("ছোট কোড লিখলে পুরো লেখাটা তালিকার প্রথমে আসে: asw → আসসালামু আলাইকুম। {how_many}");
+        let bottom = with_card(ctx, x, y, width, |ctx| {
+            let inner = x + CARD_PAD;
+            let inner_width = width - 2.0 * CARD_PAD;
+            let y = ctx.heading(&ZAP, "নিজের শর্টকাট", inner, y + CARD_PAD, inner_width);
+            let label = "সাজান…";
+            let button_width = ctx.gfx.text_width(label, Style::new(13.0)) + 28.0;
+            let text_width = inner_width - button_width - 16.0;
+            let style = Style::new(12.5).wrap();
+            let height = ctx.height(&summary, style, text_width);
+            let row = height.max(34.0);
+            ctx.text(&summary, Rect::new(inner, y + (row - height) / 2.0, text_width, height), style, DIM);
+            let button = Rect::new(inner + inner_width - button_width, y + (row - 34.0) / 2.0, button_width, 34.0);
+            ctx.button(button, label, Action::OpenShortcuts, enabled);
+            y + row
+        });
+        if !enabled {
+            ctx.fill(Rect::new(x, y, width, bottom - y), 10.0, Color(0x161110, 0.62));
+        }
+        bottom
+    }
+
     fn shortcuts_card(ctx: &mut Ctx, x: f32, y: f32, width: f32) -> f32 {
         // Keys, with "বা" / "থেকে" / "+" between them.
         type Row = (&'static [&'static str], &'static str);
         const ALWAYS: [Row; 1] = [(&["F12"], "বাংলা চালু বা বন্ধ")];
         const TYPING: [Row; 6] = [
-            (&["Space"], "বাছাই করা শব্দটা বসবে, সাথে একটা স্পেস"),
-            (&["Enter"], "বাছাই করা শব্দটা বসবে, নতুন লাইন হবে না"),
-            (&["↑", "↓", "বা", "Tab"], "তালিকায় অন্য শব্দ বাছাই"),
-            (&["1", "থেকে", "9"], "তালিকার ওই নম্বরের শব্দটা সরাসরি বসবে"),
-            (&["Esc"], "শব্দটা বাতিল, কিছুই বসবে না"),
-            (&["Ctrl", "+", "Backspace"], "লিখতে থাকা পুরো শব্দটা একবারে মুছবে"),
+            (&["Space"], "শব্দ বসবে, সাথে স্পেস"),
+            (&["Enter"], "শব্দ বসবে, নতুন লাইন নয়"),
+            (&["↑", "↓", "বা", "Tab"], "অন্য শব্দ বাছাই"),
+            (&["1", "থেকে", "9"], "ওই নম্বরের শব্দ বসবে"),
+            (&["Esc"], "শব্দ বাতিল"),
+            (&["Ctrl", "+", "Backspace"], "পুরো শব্দ মুছবে"),
         ];
         with_card(ctx, x, y, width, |ctx| {
             let inner = x + CARD_PAD;
             let inner_width = width - 2.0 * CARD_PAD;
             let mut y = ctx.heading(&COMMAND, "শর্টকাট", inner, y + CARD_PAD, inner_width);
             let keys_width = 150.0;
-            for (heading, rows) in [("সবসময়", &ALWAYS[..]), ("ফোনেটিকে লেখার সময়, সাজেশন তালিকা খোলা থাকলে", &TYPING[..])] {
+            for (heading, rows) in [("সবসময়", &ALWAYS[..]), ("ফোনেটিকে তালিকা খোলা থাকলে", &TYPING[..])] {
                 ctx.text(heading, Rect::new(inner, y - 2.0, inner_width, 18.0), Style::new(12.0).weight(600), ORANGE);
                 y += 18.0 + 8.0;
                 for (keys, meaning) in rows {
@@ -808,7 +1054,7 @@ mod app {
             let inner_width = width - 2.0 * CARD_PAD;
             let mut y = ctx.heading(&REFRESH, "আপডেট", inner, y + CARD_PAD, inner_width);
             ctx.text("নিজে থেকে আপডেট খুঁজুন", Rect::new(inner, y, inner_width - 56.0, 22.0), Style::new(14.0), INK);
-            ctx.text("দিনে একবার দেখে নেয় নতুন সংস্করণ এসেছে কি না", Rect::new(inner, y + 22.0, inner_width - 56.0, 20.0), Style::new(12.5), DIM);
+            ctx.text("দিনে একবার নতুন সংস্করণ দেখে", Rect::new(inner, y + 22.0, inner_width - 56.0, 20.0), Style::new(12.5), DIM);
             ctx.toggle(inner + inner_width - 40.0, y + 10.0, auto, Action::AutoUpdate);
             y += 42.0 + 10.0;
             ctx.fill(Rect::new(inner, y, inner_width, 1.0), 0.0, BORDER);
@@ -822,9 +1068,9 @@ mod app {
         let (status, color) = match check {
             Check::Idle => (format!("এখন আছে সংস্করণ {}", bangla_version()), DIM),
             Check::Checking => ("খোঁজা হচ্ছে…".to_owned(), DIM),
-            Check::Latest => ("আপনি সর্বশেষ সংস্করণ ব্যবহার করছেন।".to_owned(), INK),
+            Check::Latest => ("সর্বশেষ সংস্করণই আছে।".to_owned(), INK),
             Check::Found => ("নতুন সংস্করণ পাওয়া গেছে।".to_owned(), ORANGE),
-            Check::Failed => ("খোঁজা গেল না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।".to_owned(), DIM),
+            Check::Failed => ("খোঁজা গেল না। ইন্টারনেট দেখে আবার চেষ্টা করুন।".to_owned(), DIM),
         };
         let label = "এখনই খুঁজুন";
         let button_width = ctx.gfx.text_width(label, Style::new(13.0)) + 32.0;
@@ -1018,6 +1264,10 @@ mod app {
     fn act(action: Action) {
         match action {
             Action::CheckNow => return check_now(),
+            Action::OpenShortcuts => return run_self("--shortcuts"),
+            Action::SaveShortcut => return shortcuts::save(),
+            Action::EditShortcut(index) => return shortcuts::edit(index),
+            Action::RemoveShortcut(index) => return shortcuts::remove(index),
             Action::Download | Action::Later | Action::Skip | Action::ReleasePage => return update_choice(action),
             _ => {}
         }
@@ -1053,6 +1303,16 @@ mod app {
             }
         });
         refresh();
+    }
+
+    /// Starts this program again with `argument` (`--update`, `--shortcuts`): another window.
+    fn run_self(argument: &str) {
+        if let Ok(this) = std::env::current_exe() {
+            let (program, argument) = (wide(&this.to_string_lossy()), wide(argument));
+            unsafe {
+                ShellExecuteW(None, w!("open"), PCWSTR(program.as_ptr()), PCWSTR(argument.as_ptr()), PCWSTR::null(), SW_SHOWNORMAL);
+            }
+        }
     }
 
     fn open_url(url: &str) {
@@ -1099,12 +1359,7 @@ mod app {
         with_app(|app| app.check = check);
         refresh();
         if check == Check::Found {
-            if let Ok(this) = std::env::current_exe() {
-                let program = wide(&this.to_string_lossy());
-                unsafe {
-                    ShellExecuteW(None, w!("open"), PCWSTR(program.as_ptr()), w!("--update"), PCWSTR::null(), SW_SHOWNORMAL);
-                }
-            }
+            run_self("--update");
         }
     }
 
@@ -1200,8 +1455,13 @@ mod app {
     fn action_at(lparam: LPARAM) -> Option<Action> {
         let x = (lparam.0 & 0xFFFF) as i16 as f32;
         let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as f32;
+        action_at_point(x, y)
+    }
+
+    /// What is at a point in client pixels. The clickable parts are in content coordinates.
+    fn action_at_point(x: f32, y: f32) -> Option<Action> {
         with_app(|app| {
-            let (x, y) = (x * 96.0 / app.dpi, y * 96.0 / app.dpi);
+            let (x, y) = (x * 96.0 / app.dpi, y * 96.0 / app.dpi + app.scroll);
             app.hits.iter().rev().find(|(rect, _)| rect.contains(x, y)).map(|(_, action)| *action)
         })
         .flatten()
@@ -1232,10 +1492,15 @@ mod app {
                     app.gfx.paint(dc, client.right, client.bottom, app.dpi, |canvas| {
                         let (w, h) = (client.right as f32 * 96.0 / app.dpi, client.bottom as f32 * 96.0 / app.dpi);
                         canvas.fill_rect(Rect::new(0.0, 0.0, w, h), BG);
-                        let mut ctx = Ctx { canvas: Some(canvas), gfx: &app.gfx, hover: app.hover, hits: Vec::new() };
+                        let mut ctx = Ctx { canvas: Some(canvas), gfx: &app.gfx, hover: app.hover, hits: Vec::new(), dy: app.scroll };
                         match app.screen {
                             Screen::Settings => {
-                                draw_settings(&mut ctx, &app.settings, app.check);
+                                draw_settings(&mut ctx, &app.settings, app.check, app.shortcut_count);
+                            }
+                            Screen::Shortcuts => {
+                                if let Some(d) = app.dialog.as_ref() {
+                                    shortcuts::draw(&mut ctx, d);
+                                }
                             }
                             Screen::About => {
                                 draw_about(&mut ctx, app.check);
@@ -1245,6 +1510,11 @@ mod app {
                             }
                         }
                         hits = ctx.hits;
+                        // The scrollbar, over everything, when the content doesn't fit.
+                        if let Some(bar) = thumb(app) {
+                            let alpha = if app.drag.is_some() { 0.42 } else { 0.22 };
+                            canvas.fill_round(bar, BAR_WIDTH / 2.0, Color(0xFFFFFF, alpha));
+                        }
                     });
                     app.hits = hits;
                 });
@@ -1255,6 +1525,9 @@ mod app {
             }
             WM_ERASEBKGND => LRESULT(1),
             WM_MOUSEMOVE => {
+                if drag_bar(lparam) {
+                    return LRESULT(0);
+                }
                 set_hover(action_at(lparam));
                 let mut track = TRACKMOUSEEVENT {
                     cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
@@ -1282,7 +1555,24 @@ mod app {
                 }
                 unsafe { DefWindowProcW(window, message, wparam, lparam) }
             }
+            WM_LBUTTONDOWN => {
+                press_bar(window, lparam);
+                LRESULT(0)
+            }
+            WM_MOUSEWHEEL => {
+                let notches = ((wparam.0 >> 16) & 0xFFFF) as i16 as f32 / 120.0;
+                scroll_by(-notches * WHEEL_STEP);
+                LRESULT(0)
+            }
+            WM_CAPTURECHANGED => {
+                release_bar(window);
+                LRESULT(0)
+            }
             WM_LBUTTONUP => {
+                // The end of a drag of the scrollbar isn't a click.
+                if release_bar(window) {
+                    return LRESULT(0);
+                }
                 if let Some(action) = action_at(lparam) {
                     if !guarded() {
                         act(action);
@@ -1290,10 +1580,23 @@ mod app {
                 }
                 LRESULT(0)
             }
+            WM_KEYDOWN if [VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END].iter().any(|k| k.0 == wparam.0 as u16) => {
+                let view = with_app(|app| app.view).unwrap_or(0.0);
+                let key = wparam.0 as u16;
+                match key {
+                    k if k == VK_UP.0 => scroll_by(-WHEEL_STEP / 2.0),
+                    k if k == VK_DOWN.0 => scroll_by(WHEEL_STEP / 2.0),
+                    k if k == VK_PRIOR.0 => scroll_by(-view * 0.9),
+                    k if k == VK_NEXT.0 => scroll_by(view * 0.9),
+                    k if k == VK_HOME.0 => scroll_to(0.0),
+                    _ => scroll_to(f32::MAX),
+                }
+                LRESULT(0)
+            }
             WM_KEYDOWN if wparam.0 as u16 == VK_ESCAPE.0 => {
                 // Esc closes the About box; in the update dialog it is "পরে".
                 match with_app(|app| app.screen) {
-                    Some(Screen::About) => unsafe {
+                    Some(Screen::About | Screen::Shortcuts) => unsafe {
                         let _ = DestroyWindow(window);
                     },
                     Some(Screen::Update) if !guarded() => update_choice(Action::Later),
@@ -1301,6 +1604,14 @@ mod app {
                 }
                 LRESULT(0)
             }
+            WM_COMMAND => {
+                shortcuts::command(window, wparam);
+                LRESULT(0)
+            }
+            WM_CTLCOLOREDIT => match shortcuts::colors(HDC(wparam.0 as *mut _)) {
+                Some(brush) => brush,
+                None => unsafe { DefWindowProcW(window, message, wparam, lparam) },
+            },
             WM_CHECKED => {
                 checked(Check::from_code(wparam.0));
                 LRESULT(0)
@@ -1335,8 +1646,14 @@ mod app {
                 LRESULT(0)
             }
             WM_TIMER => {
-                // The layout may have changed from the top bar meanwhile.
-                if with_app(|app| app.settings.reload_if_changed()).unwrap_or(false) {
+                // The layout may have changed from the top bar meanwhile, and the shortcuts in
+                // their dialog.
+                let changed = with_app(|app| {
+                    let count = app.shortcuts.all().len();
+                    let shortcuts_changed = std::mem::replace(&mut app.shortcut_count, count) != count;
+                    app.settings.reload_if_changed() || shortcuts_changed
+                });
+                if changed.unwrap_or(false) {
                     refresh();
                 }
                 LRESULT(0)

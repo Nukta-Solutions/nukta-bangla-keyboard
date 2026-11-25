@@ -158,8 +158,9 @@ impl TextService_Impl {
             // The mode was switched elsewhere: the word typed with the old one is finished first.
             return true;
         }
-        if english {
+        if english || win::latin_only_focus() {
             // English, as with Avro: the key is the app's, once a word in progress is finished.
+            // So is every key in a box that asks for English letters (the shortcut code).
             return composing;
         }
         let current = current.0;
@@ -218,7 +219,7 @@ impl TextService_Impl {
             let state = self.state.borrow();
             (state.layout, state.english)
         };
-        if english {
+        if english || win::latin_only_focus() {
             self.commit_all(Some(context), true);
             return Ok(false);
         }
@@ -247,7 +248,22 @@ impl TextService_Impl {
                 None => false,
             };
         }
-        let out = event.character().and_then(|c| self.state.borrow_mut().bijoy.process_character(c));
+        let character = event.character();
+        // g after a finished letter (ম typed earlier, or the cursor moved there): the ্ shows on it
+        // at once (ম্) if the app lets us read the letter. Read only for g, and only when nothing
+        // is being composed (the engine knows what it typed itself).
+        let before = match character {
+            Some('g') if !self.state.borrow().bijoy.is_composing() => {
+                let client = self.state.borrow().client;
+                edit::char_before(context, client)
+            }
+            _ => None,
+        };
+        let out = character.and_then(|c| {
+            let mut state = self.state.borrow_mut();
+            state.bijoy.set_text_before(before);
+            state.bijoy.process_character(c)
+        });
         match out {
             Some(out) => {
                 self.show_bijoy(context, out);

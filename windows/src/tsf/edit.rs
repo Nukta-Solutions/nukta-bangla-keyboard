@@ -6,8 +6,9 @@
 //! and only finished text is left in the document. None of the macOS `ClientWriter`'s
 //! read-back-and-rewrite work is needed.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::mem::ManuallyDrop;
+use std::rc::Rc;
 
 use windows::core::{implement, Interface, Result};
 use windows::Win32::Foundation::RECT;
@@ -15,7 +16,8 @@ use windows::Win32::System::Variant::{VARIANT, VT_I4};
 use windows::Win32::UI::TextServices::{
     ITfComposition, ITfCompositionSink, ITfContext, ITfContextComposition, ITfEditSession, ITfEditSession_Impl,
     ITfInsertAtSelection, ITfRange, GUID_PROP_ATTRIBUTE, INSERT_TEXT_AT_SELECTION_FLAGS, TF_AE_NONE, TF_ANCHOR_END,
-    TF_ES_ASYNCDONTCARE, TF_ES_READWRITE, TF_ES_SYNC, TF_IAS_QUERYONLY, TF_SELECTION, TF_SELECTIONSTYLE,
+    TF_ANCHOR_START, TF_DEFAULT_SELECTION, TF_ES_ASYNCDONTCARE, TF_ES_READ, TF_ES_READWRITE, TF_ES_SYNC,
+    TF_IAS_QUERYONLY, TF_SELECTION, TF_SELECTIONSTYLE,
 };
 
 use super::guard;
@@ -44,6 +46,44 @@ pub(super) fn run(context: &ITfContext, client: u32, sync: bool, body: impl FnOn
     let session: ITfEditSession = EditSession { body: RefCell::new(Some(Box::new(body))) }.into();
     let flags = TF_ES_READWRITE | if sync { TF_ES_SYNC } else { TF_ES_ASYNCDONTCARE };
     unsafe { context.RequestEditSession(client, &session, flags)? }.ok()
+}
+
+/// The character just before the cursor (or before the selection), read now. None when there is
+/// none, or when the app doesn't let its text be read (some don't, or refuse a read just now).
+pub(super) fn char_before(context: &ITfContext, client: u32) -> Option<char> {
+    let found: Rc<Cell<Option<char>>> = Rc::default();
+    let out = found.clone();
+    let target = context.clone();
+    let session: ITfEditSession = EditSession {
+        body: RefCell::new(Some(Box::new(move |ec| {
+            unsafe {
+                let mut selection = [TF_SELECTION::default()];
+                let mut fetched = 0u32;
+                target.GetSelection(ec, TF_DEFAULT_SELECTION, &mut selection, &mut fetched)?;
+                let range = ManuallyDrop::into_inner(std::mem::replace(&mut selection[0].range, ManuallyDrop::new(None)));
+                let Some(range) = range.filter(|_| fetched > 0) else { return Ok(()) };
+                range.Collapse(ec, TF_ANCHOR_START)?;
+                let mut shifted = 0i32;
+                range.ShiftStart(ec, -1, &mut shifted, std::ptr::null())?;
+                if shifted == 0 {
+                    return Ok(()); // the start of the text
+                }
+                let mut text = [0u16; 1];
+                let mut length = 0u32;
+                range.GetText(ec, 0, &mut text, &mut length)?;
+                if length == 1 {
+                    out.set(char::from_u32(u32::from(text[0])));
+                }
+            }
+            Ok(())
+        }))),
+    }
+    .into();
+    let read = unsafe { context.RequestEditSession(client, &session, TF_ES_READ | TF_ES_SYNC) };
+    if read.map(|hr| hr.is_ok()) != Ok(true) {
+        return None;
+    }
+    found.get()
 }
 
 /// Puts `text` into the document as final text: in place of the composition when there is one

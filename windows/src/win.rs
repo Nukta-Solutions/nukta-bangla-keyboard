@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use windows::core::{s, w, Result, BOOL, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HLOCAL};
+use windows::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE, HLOCAL, HWND};
 use windows::Win32::Security::Authorization::{
     ConvertStringSidToSidW, GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW, EXPLICIT_ACCESS_W,
     GRANT_ACCESS, SE_FILE_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_WELL_KNOWN_GROUP, TRUSTEE_W,
@@ -15,7 +15,10 @@ use windows::Win32::Security::{
 use windows::Win32::Storage::FileSystem::{DELETE, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
 use windows::Win32::UI::Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath, KF_FLAG_NO_PACKAGE_REDIRECTION};
+
+use windows::Win32::UI::WindowsAndMessaging::{GetPropW, SetPropW};
 
 use crate::tsf::{guid_string, CLSID_TEXT_SERVICE, GUID_PROFILE, LANGID_KEYBOARD, LANGID_OLD};
 
@@ -233,4 +236,24 @@ pub fn settings_program(dll: &Path) -> PathBuf {
         .and_then(Path::parent)
         .unwrap_or(Path::new(""))
         .join("NuktaBanglaSettings.exe")
+}
+
+/// A text box that wants English letters whatever the keyboard is set to carries this window
+/// property, and the text service leaves its keys to it: the code box of the shortcuts dialog, where
+/// `asw` must stay `asw`.
+const LATIN_ONLY: PCWSTR = w!("NuktaBanglaLatinOnly");
+
+/// Marks `window` (a text box) as wanting English letters.
+pub fn mark_latin_only(window: HWND) {
+    unsafe {
+        let _ = SetPropW(window, LATIN_ONLY, Some(HANDLE(std::ptr::dangling_mut())));
+    }
+}
+
+/// The keyboard focus is in a text box marked with `mark_latin_only`.
+pub fn latin_only_focus() -> bool {
+    unsafe {
+        let focus = GetFocus();
+        !focus.is_invalid() && !GetPropW(focus, LATIN_ONLY).is_invalid()
+    }
 }

@@ -71,12 +71,20 @@ pub fn normalize_text(text: &str) -> Result<String, ShortcutError> {
     }
 }
 
-/// The code also spells a dictionary word (`ami` → আমি): as a shortcut it would come first every
-/// time that word is typed, so the settings warn before saving it.
-pub fn is_dictionary_word(code: &str) -> bool {
+/// A dictionary word the code also spells (`ami` → আমি), if any: as a shortcut it would come first
+/// every time that word is typed, so the settings name the word in a warning before saving it.
+pub fn dictionary_word(code: &str) -> Option<String> {
     static DICTIONARY: OnceLock<upodesh::avro::Suggest> = OnceLock::new();
-    let Some(code) = normalize_code(code) else { return false };
-    !DICTIONARY.get_or_init(upodesh::avro::Suggest::new).suggest(&code).is_empty()
+    let code = normalize_code(code)?;
+    let mut words = DICTIONARY.get_or_init(upodesh::avro::Suggest::new).suggest(&code);
+    // The dictionary's order changes from run to run: the word spelt exactly as typed, if it is
+    // one (bari → বারি, not বাড়ি), else the first in a fixed order.
+    let literal = okkhor::parser::Parser::new_phonetic().convert(&code);
+    if words.contains(&literal) {
+        return Some(literal);
+    }
+    words.sort();
+    words.into_iter().next()
 }
 
 pub struct Shortcuts {
@@ -260,13 +268,13 @@ pub unsafe extern "C" fn nukta_shortcuts_remove(shortcuts: *mut Shortcuts, code:
     }
 }
 
-/// True if the code also spells a dictionary word: the settings warn before saving it.
+/// A dictionary word the code also spells, else NULL: the settings warn before saving it.
 ///
 /// # Safety
 /// `code` must be a NUL-terminated string.
 #[no_mangle]
-pub unsafe extern "C" fn nukta_is_dictionary_word(code: *const c_char) -> bool {
-    from_c(code).is_some_and(is_dictionary_word)
+pub unsafe extern "C" fn nukta_dictionary_word(code: *const c_char) -> *mut c_char {
+    from_c(code).and_then(dictionary_word).map_or(ptr::null_mut(), to_c)
 }
 
 /// Frees a string one of these functions returned.
@@ -353,12 +361,12 @@ mod tests {
 
     #[test]
     fn dictionary_words_are_spotted() {
-        assert!(is_dictionary_word("ami"));
-        assert!(is_dictionary_word("bangla"));
+        assert_eq!(dictionary_word("ami").as_deref(), Some("আমি"));
+        assert!(dictionary_word("bangla").is_some());
         // অশ্ব: a warning, not a refusal.
-        assert!(is_dictionary_word("asw"));
-        assert!(!is_dictionary_word("tnx"));
-        assert!(!is_dictionary_word("x1"));
+        assert_eq!(dictionary_word("asw").as_deref(), Some("অশ্ব"));
+        assert_eq!(dictionary_word("tnx"), None);
+        assert_eq!(dictionary_word("x1"), None);
     }
 
     #[test]
@@ -383,7 +391,11 @@ mod tests {
             assert!(nukta_shortcuts_remove(shortcuts, code.as_ptr()));
             assert!(nukta_shortcuts_text(shortcuts, code.as_ptr()).is_null());
             let ami = CString::new("ami").unwrap();
-            assert!(nukta_is_dictionary_word(ami.as_ptr()));
+            let word = nukta_dictionary_word(ami.as_ptr());
+            assert_eq!(CStr::from_ptr(word).to_str().unwrap(), "আমি");
+            nukta_string_free(word);
+            let tnx = CString::new("tnx").unwrap();
+            assert!(nukta_dictionary_word(tnx.as_ptr()).is_null());
             nukta_shortcuts_free(shortcuts);
         }
     }

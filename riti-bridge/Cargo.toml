@@ -17,6 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # applied: an AutoCorrect on/off switch.
 riti = { path = "riti" }
 # The user's shortcuts (src/shortcuts.rs): the same crates riti uses, so nothing new is built.
+okkhor = "0.8"
 serde_json = "1.0"
 upodesh = "0.4"
 
